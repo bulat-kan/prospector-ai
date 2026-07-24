@@ -1,0 +1,115 @@
+from enum import Enum
+
+
+class LocationType(str, Enum):
+    COMMERCIAL = "COMMERCIAL"
+    RESIDENTIAL = "RESIDENTIAL"
+    SOHO = "SOHO"
+    WAREHOUSE = "WAREHOUSE"
+    RETAIL = "RETAIL"
+    OTHER = "OTHER"
+
+
+class TerritoryStatus(str, Enum):
+    INSIDE = "INSIDE"
+    OUTSIDE = "OUTSIDE"
+    UNKNOWN = "UNKNOWN"
+
+
+class SpectrumRelationship(str, Enum):
+    EXISTING = "EXISTING"
+    FORMER = "FORMER"
+    PROSPECT = "PROSPECT"
+    UNKNOWN = "UNKNOWN"
+
+
+class ContactRole(str, Enum):
+    DECISION_MAKER = "DECISION_MAKER"
+    INFLUENCER = "INFLUENCER"
+    GATEKEEPER = "GATEKEEPER"
+    UNKNOWN = "UNKNOWN"
+
+
+class ProductType(str, Enum):
+    INTERNET = "INTERNET"
+    MOBILE = "MOBILE"
+    VOICE = "VOICE"
+    VIDEO = "VIDEO"
+    WIFI = "WIFI"
+    STATIC_IP = "STATIC_IP"
+    BACKUP_INTERNET = "BACKUP_INTERNET"
+    OTHER = "OTHER"
+
+
+class ProviderType(str, Enum):
+    SPECTRUM = "SPECTRUM"
+    COMPETITOR = "COMPETITOR"
+    UNKNOWN = "UNKNOWN"
+
+
+class ServiceRecordType(str, Enum):
+    ACTIVE_SERVICE = "ACTIVE_SERVICE"
+    PRODUCT_OPPORTUNITY = "PRODUCT_OPPORTUNITY"
+
+
+class ServiceStatus(str, Enum):
+    ACTIVE = "ACTIVE"
+    PENDING = "PENDING"
+    DISCONNECTED = "DISCONNECTED"
+    UNKNOWN = "UNKNOWN"
+
+
+class OpportunityStage(str, Enum):
+    NEW = "NEW"
+    RESEARCHING = "RESEARCHING"
+    CONTACT_ATTEMPTED = "CONTACT_ATTEMPTED"
+    QUALIFIED = "QUALIFIED"
+    APPOINTMENT = "APPOINTMENT"
+    QUOTE = "QUOTE"
+    PENDING_INSTALL = "PENDING_INSTALL"
+    WON = "WON"
+    LOST = "LOST"
+
+
+class ActivityType(str, Enum):
+    DOOR_KNOCK = "DOOR_KNOCK"
+    CALL = "CALL"
+    EMAIL = "EMAIL"
+    SMS = "SMS"
+    APPOINTMENT = "APPOINTMENT"
+    REFERRAL = "REFERRAL"
+
+
+class ActivityOutcome(str, Enum):
+    NO_ANSWER = "NO_ANSWER"
+    GATEKEEPER_REACHED = "GATEKEEPER_REACHED"
+    DECISION_MAKER_REACHED = "DECISION_MAKER_REACHED"
+    APPOINTMENT_SET = "APPOINTMENT_SET"
+    QUOTE_REQUESTED = "QUOTE_REQUESTED"
+    WON = "WON"
+    LOST = "LOST"
+    OTHER = "OTHER"
+
+
+class TaskType(str, Enum):
+    CALL = "CALL"
+    EMAIL = "EMAIL"
+    TEXT = "TEXT"
+    VISIT = "VISIT"
+    PREPARE_QUOTE = "PREPARE_QUOTE"
+    INSTALL_CHECK = "INSTALL_CHECK"
+    OTHER = "OTHER"
+
+
+class TaskStatus(str, Enum):
+    OPEN = "OPEN"
+    COMPLETED = "COMPLETED"
+    CANCELED = "CANCELED"
+
+
+class SaleStatus(str, Enum):
+    SUBMITTED = "SUBMITTED"
+    SCHEDULED = "SCHEDULED"
+    INSTALLED = "INSTALLED"
+    CANCELED = "CANCELED"
+    DISCONNECTED = "DISCONNECTED"
