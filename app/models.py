@@ -26,6 +26,7 @@ from app.enums import (
     ContactRole,
     LocationType,
     OpportunityStage,
+    ProductCategory,
     ProductType,
     ProviderType,
     SaleStatus,
@@ -107,6 +108,82 @@ class Company(TimestampMixin, Base):
 
     def __repr__(self) -> str:
         return f"Company(id={self.id!r}, name={self.name!r})"
+
+
+class Product(Base):
+    __tablename__ = "products"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    code: Mapped[str] = mapped_column(String(80), nullable=False, unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(160), nullable=False, index=True)
+    category: Mapped[ProductCategory] = mapped_column(enum_column(ProductCategory), nullable=False, index=True)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+    counts_as_internet_connect: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    counts_as_connected_unit: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    creates_mrr: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    uses_tiered_rates: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    uses_flat_rate: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    available_new_customer: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    available_existing_customer: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    available_soho: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    requires_existing_internet: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    flat_commission_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
+
+    def __repr__(self) -> str:
+        return f"Product(id={self.id!r}, code={self.code!r}, name={self.name!r})"
+
+
+class CommissionPlan(Base):
+    __tablename__ = "commission_plans"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(160), nullable=False, unique=True, index=True)
+    effective_start: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    effective_end: Mapped[Optional[date]] = mapped_column(Date, index=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+    bonus_percentage: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("0.00"), nullable=False)
+    bonus_unit_threshold: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    minimum_internet_threshold: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+
+    tiers: Mapped[list["CommissionTier"]] = relationship(
+        back_populates="commission_plan",
+        cascade="all, delete-orphan",
+        order_by="CommissionTier.display_order",
+    )
+
+    def __repr__(self) -> str:
+        return f"CommissionPlan(id={self.id!r}, name={self.name!r})"
+
+
+class CommissionTier(Base):
+    __tablename__ = "commission_tiers"
+    __table_args__ = (
+        UniqueConstraint("commission_plan_id", "tier_name", name="uq_commission_tiers_plan_tier_name"),
+        Index("ix_commission_tiers_plan_order", "commission_plan_id", "display_order"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    commission_plan_id: Mapped[int] = mapped_column(
+        ForeignKey("commission_plans.id"),
+        nullable=False,
+        index=True,
+    )
+    tier_name: Mapped[str] = mapped_column(String(40), nullable=False)
+    minimum_internet: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    maximum_internet: Mapped[Optional[int]] = mapped_column(Integer, index=True)
+    internet_rate: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    mobile_rate: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    voice_rate: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    video_rate: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    mrr_percentage: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
+    display_order: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    commission_plan: Mapped["CommissionPlan"] = relationship(back_populates="tiers")
+
+    def __repr__(self) -> str:
+        return f"CommissionTier(id={self.id!r}, tier_name={self.tier_name!r})"
 
 
 class Location(TimestampMixin, Base):

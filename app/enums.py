@@ -41,6 +41,13 @@ class ProductType(str, Enum):
     OTHER = "OTHER"
 
 
+class ProductCategory(str, Enum):
+    TIERED = "TIERED"
+    A_LA_CARTE = "A_LA_CARTE"
+    SERVICE = "SERVICE"
+    OTHER = "OTHER"
+
+
 class ProviderType(str, Enum):
     SPECTRUM = "SPECTRUM"
     COMPETITOR = "COMPETITOR"
