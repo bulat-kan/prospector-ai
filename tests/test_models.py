@@ -425,7 +425,7 @@ def test_product_catalog_seeded_correctly(db_session) -> None:
         "BUSINESS_VOICE",
         "INVINCIBLE_WIFI",
         "UNLIMITED_PLUS",
-        "WIRELESS_INTERNET_BACKUP",
+        "WIB",
     }
 
     internet = product_by_code["BUSINESS_INTERNET"]
@@ -435,7 +435,7 @@ def test_product_catalog_seeded_correctly(db_session) -> None:
     assert internet.creates_mrr is True
     assert internet.uses_tiered_rates is True
 
-    wib = product_by_code["WIRELESS_INTERNET_BACKUP"]
+    wib = product_by_code["WIB"]
     assert wib.category == ProductCategory.A_LA_CARTE
     assert wib.counts_as_connected_unit is False
     assert wib.creates_mrr is True

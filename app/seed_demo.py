@@ -83,7 +83,7 @@ PRODUCTS = [
         "available_soho": True,
     },
     {
-        "code": "WIRELESS_INTERNET_BACKUP",
+        "code": "WIB",
         "name": "Wireless Internet Backup",
         "category": ProductCategory.A_LA_CARTE,
         "description": "Wireless Internet Backup add-on.",
@@ -113,6 +113,10 @@ PRODUCTS = [
     },
 ]
 
+LEGACY_PRODUCT_CODES = {
+    "WIRELESS_INTERNET_BACKUP": "WIB",
+}
+
 COMMISSION_TIERS = [
     ("5-9", 5, 9, "100.00", "75.00", "60.00", "50.00", "30.00"),
     ("10-14", 10, 14, "200.00", "150.00", "120.00", "100.00", "60.00"),
@@ -125,9 +129,20 @@ COMMISSION_TIERS = [
 
 def seed_products(session: Session) -> int:
     created = 0
+    for legacy_code, current_code in LEGACY_PRODUCT_CODES.items():
+        legacy_product = session.scalar(select(Product).where(Product.code == legacy_code))
+        current_product = session.scalar(select(Product).where(Product.code == current_code))
+        if legacy_product is not None and current_product is None:
+            legacy_product.code = current_code
+        elif legacy_product is not None and current_product is not None:
+            session.delete(legacy_product)
+    session.flush()
+
     for product_data in PRODUCTS:
         existing_product = session.scalar(select(Product).where(Product.code == product_data["code"]))
         if existing_product is not None:
+            for key, value in product_data.items():
+                setattr(existing_product, key, value)
             continue
 
         defaults = {

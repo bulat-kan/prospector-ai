@@ -130,6 +130,8 @@ class Product(Base):
     requires_existing_internet: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     flat_commission_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
 
+    sale_items: Mapped[list["SaleItem"]] = relationship(back_populates="product")
+
     def __repr__(self) -> str:
         return f"Product(id={self.id!r}, code={self.code!r}, name={self.name!r})"
 
@@ -470,6 +472,7 @@ class SaleItem(TimestampMixin, Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     sale_id: Mapped[int] = mapped_column(ForeignKey("sales.id"), nullable=False, index=True)
+    product_id: Mapped[Optional[int]] = mapped_column(ForeignKey("products.id"), index=True)
     product_type: Mapped[ProductType] = mapped_column(enum_column(ProductType), nullable=False, index=True)
     quantity: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     monthly_revenue: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
@@ -478,3 +481,4 @@ class SaleItem(TimestampMixin, Base):
     status: Mapped[Optional[str]] = mapped_column(String(80), index=True)
 
     sale: Mapped["Sale"] = relationship(back_populates="sale_items")
+    product: Mapped[Optional["Product"]] = relationship(back_populates="sale_items")
