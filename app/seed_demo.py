@@ -4,7 +4,7 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.database import Base, SessionLocal, engine
+from app.database import SessionLocal
 from app.enums import (
     ActivityOutcome,
     ActivityType,
@@ -14,6 +14,7 @@ from app.enums import (
     ProductCategory,
     ProductType,
     ProviderType,
+    SaleStatus,
     ServiceRecordType,
     ServiceStatus,
     SpectrumRelationship,
@@ -31,6 +32,7 @@ from app.models import (
     Opportunity,
     Product,
     Sale,
+    SaleItem,
     Service,
     Task,
 )
@@ -38,6 +40,7 @@ from app.models import (
 
 COMPANY_NAME = "Sunshine Plumbing LLC"
 COMMISSION_PLAN_NAME = "Spectrum Business AE 2026"
+DEMO_SALES_MARKER = "July 2026 analytics demo"
 
 
 PRODUCTS = [
@@ -414,6 +417,118 @@ def seed_demo(session: Session) -> bool:
     return True
 
 
+def product_type_for_code(product_code: str) -> ProductType:
+    product_types = {
+        "BUSINESS_INTERNET": ProductType.INTERNET,
+        "BUSINESS_MOBILE": ProductType.MOBILE,
+        "BUSINESS_VOICE": ProductType.VOICE,
+        "BUSINESS_VIDEO": ProductType.VIDEO,
+        "WIB": ProductType.BACKUP_INTERNET,
+        "INVINCIBLE_WIFI": ProductType.WIFI,
+        "UNLIMITED_PLUS": ProductType.MOBILE,
+    }
+    return product_types[product_code]
+
+
+def sale_item_for_product(product: Product, quantity: int, incremental_mrr: str) -> SaleItem:
+    mrr = Decimal(incremental_mrr)
+    return SaleItem(
+        product=product,
+        product_type=product_type_for_code(product.code),
+        quantity=quantity,
+        monthly_revenue=mrr,
+        incremental_mrr=mrr,
+    )
+
+
+def seed_demo_sales(session: Session) -> bool:
+    existing_demo_sale = session.scalar(select(Sale).where(Sale.notes == DEMO_SALES_MARKER))
+    if existing_demo_sale is not None:
+        print("Demo July 2026 sales already exist; no sales created.")
+        return False
+
+    company = session.scalar(select(Company).where(Company.name == COMPANY_NAME))
+    if company is None:
+        seed_demo(session)
+        company = session.scalar(select(Company).where(Company.name == COMPANY_NAME))
+    if company is None:
+        raise RuntimeError(f"Could not find or create {COMPANY_NAME}.")
+
+    location = company.locations[0]
+    opportunity = company.opportunities[0] if company.opportunities else None
+    products = {product.code: product for product in session.scalars(select(Product)).all()}
+    required_codes = {
+        "BUSINESS_INTERNET",
+        "BUSINESS_MOBILE",
+        "BUSINESS_VOICE",
+        "BUSINESS_VIDEO",
+        "WIB",
+    }
+    missing_codes = sorted(required_codes - set(products))
+    if missing_codes:
+        raise RuntimeError(f"Missing seeded products for demo sales: {', '.join(missing_codes)}.")
+
+    sales = [
+        Sale(
+            opportunity=opportunity,
+            company=company,
+            location=location,
+            order_date=date(2026, 7, 7),
+            status=SaleStatus.INSTALLED,
+            total_mrr=Decimal("900.00"),
+            notes=DEMO_SALES_MARKER,
+            sale_items=[
+                sale_item_for_product(products["BUSINESS_INTERNET"], 3, "300.00"),
+                sale_item_for_product(products["BUSINESS_MOBILE"], 8, "400.00"),
+                sale_item_for_product(products["BUSINESS_VOICE"], 2, "100.00"),
+                sale_item_for_product(products["BUSINESS_VIDEO"], 1, "100.00"),
+            ],
+        ),
+        Sale(
+            opportunity=opportunity,
+            company=company,
+            location=location,
+            order_date=date(2026, 7, 18),
+            status=SaleStatus.INSTALLED,
+            total_mrr=Decimal("450.00"),
+            notes=DEMO_SALES_MARKER,
+            sale_items=[
+                sale_item_for_product(products["BUSINESS_INTERNET"], 2, "250.00"),
+                sale_item_for_product(products["BUSINESS_MOBILE"], 4, "100.00"),
+                sale_item_for_product(products["WIB"], 1, "100.00"),
+            ],
+        ),
+        Sale(
+            opportunity=opportunity,
+            company=company,
+            location=location,
+            order_date=date(2026, 7, 20),
+            status=SaleStatus.SUBMITTED,
+            total_mrr=Decimal("700.00"),
+            notes=DEMO_SALES_MARKER,
+            sale_items=[
+                sale_item_for_product(products["BUSINESS_INTERNET"], 2, "300.00"),
+                sale_item_for_product(products["BUSINESS_MOBILE"], 10, "400.00"),
+            ],
+        ),
+        Sale(
+            opportunity=opportunity,
+            company=company,
+            location=location,
+            order_date=date(2026, 7, 22),
+            status=SaleStatus.CANCELED,
+            total_mrr=Decimal("150.00"),
+            notes=DEMO_SALES_MARKER,
+            sale_items=[sale_item_for_product(products["BUSINESS_INTERNET"], 1, "150.00")],
+        ),
+    ]
+
+    session.add_all(sales)
+    session.commit()
+    print("Created July 2026 demo sales.")
+    return True
+
+
 def print_demo_summary(session: Session) -> None:
     company = session.scalar(select(Company).where(Company.name == COMPANY_NAME))
     if company is None:
@@ -464,15 +579,20 @@ def print_configuration_summary(session: Session) -> None:
     print(f"Number of products: {product_count}")
     print(f"Number of commission plans: {plan_count}")
     print(f"Number of commission tiers: {tier_count}")
+    sale_count = session.scalar(select(func.count()).select_from(Sale).where(Sale.notes == DEMO_SALES_MARKER))
+    print(f"Number of July 2026 demo sales: {sale_count}")
 
 
 if __name__ == "__main__":
-    Base.metadata.create_all(bind=engine)
+    from app.init_db import init_db
+
+    init_db()
     with SessionLocal() as session:
         products_created, plan_created, tiers_created = seed_configuration(session)
         print(f"Products created: {products_created}")
         print(f"Commission plan created: {plan_created}")
         print(f"Commission tiers created: {tiers_created}")
         seed_demo(session)
+        seed_demo_sales(session)
         print_demo_summary(session)
         print_configuration_summary(session)

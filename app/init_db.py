@@ -14,6 +14,8 @@ def ensure_sqlite_schema_additions() -> None:
     with engine.begin() as connection:
         if "product_id" not in sale_item_columns:
             connection.execute(text("ALTER TABLE sale_items ADD COLUMN product_id INTEGER REFERENCES products(id)"))
+        if "incremental_mrr" not in sale_item_columns:
+            connection.execute(text("ALTER TABLE sale_items ADD COLUMN incremental_mrr NUMERIC(12, 2)"))
         connection.execute(text("CREATE INDEX IF NOT EXISTS ix_sale_items_product_id ON sale_items (product_id)"))
 
 

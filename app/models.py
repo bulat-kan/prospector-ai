@@ -476,6 +476,7 @@ class SaleItem(TimestampMixin, Base):
     product_type: Mapped[ProductType] = mapped_column(enum_column(ProductType), nullable=False, index=True)
     quantity: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     monthly_revenue: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
+    incremental_mrr: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
     installed_quantity: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     activation_date: Mapped[Optional[date]] = mapped_column(Date)
     status: Mapped[Optional[str]] = mapped_column(String(80), index=True)
