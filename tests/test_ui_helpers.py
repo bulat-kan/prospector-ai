@@ -1,0 +1,40 @@
+from decimal import Decimal
+
+from app.ui_helpers import calculate_progress, clamp_progress, format_currency, format_percentage, month_label, tier_label
+
+
+def test_currency_formatting() -> None:
+    assert format_currency(Decimal("2200.25")) == "$2,200.25"
+
+
+def test_percentage_formatting() -> None:
+    assert format_percentage(Decimal("7.50")) == "7.5%"
+
+
+def test_progress_below_range_clamps_to_zero() -> None:
+    assert clamp_progress(-0.5) == 0.0
+
+
+def test_progress_above_range_clamps_to_one() -> None:
+    assert clamp_progress(1.5) == 1.0
+
+
+def test_current_tier_progress_calculation() -> None:
+    assert calculate_progress(5, 5, 10) == 0.0
+    assert calculate_progress(7, 5, 10) == 0.4
+
+
+def test_highest_tier_behavior() -> None:
+    assert calculate_progress(30, 30, None) == 1.0
+
+
+def test_month_label_formatting() -> None:
+    assert month_label(2026, 7) == "July 2026"
+
+
+def test_decimal_values_format_correctly() -> None:
+    assert format_currency(Decimal("1350")) == "$1,350.00"
+
+
+def test_tier_label_uses_en_dash() -> None:
+    assert tier_label("5-9") == "5–9"

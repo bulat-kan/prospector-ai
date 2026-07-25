@@ -1,8 +1,9 @@
 # Prospector AI
 
-Local Python and Streamlit MVP for prospecting workflows.
+Local Python and Streamlit MVP for prospecting workflows, monthly sales analytics,
+and configurable commission projections.
 
-## Setup
+## Installation
 
 ```bash
 python3 -m venv .venv
@@ -10,27 +11,40 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Database
+## Database Initialization
 
-The SQLite database is configured at:
-
-```text
-data/prospector_ai.db
-```
-
-The SQLAlchemy foundation lives in `app/database.py`. Database models have not
-been added yet.
-
-## Run
-
-Add a Streamlit entry point when the MVP UI is ready, then run it with:
+The SQLite database is stored at `data/prospector_ai.db`.
 
 ```bash
-streamlit run <entrypoint>.py
+python -m app.init_db
 ```
 
-## Import Check
+## Demo Data
+
+Seed deterministic demo data, including July 2026 sales and commission
+configuration:
+
+```bash
+python -m app.seed_demo
+```
+
+July 2026 contains deterministic sales data for dashboard testing.
+
+## Tests
+
+```bash
+pytest -v
+```
+
+## Streamlit Dashboard
+
+```bash
+streamlit run app/ui.py
+```
+
+## Useful CLI Checks
 
 ```bash
 python -c "import app.database"
+python -m app.analytics
 ```
