@@ -140,7 +140,7 @@ def render_commission_breakdown(data: DashboardData) -> None:
         ("Estimated payout", result.estimated_payout),
     ]
     table = pd.DataFrame({"Component": [row[0] for row in rows], "Amount": [format_currency(row[1]) for row in rows]})
-    st.dataframe(table, hide_index=True, use_container_width=True)
+    st.dataframe(table, hide_index=True, width="stretch")
 
     chart_rows = rows[:-1]
     chart = pd.DataFrame({"Component": [row[0] for row in chart_rows], "Amount": [float(row[1]) for row in chart_rows]})
@@ -168,7 +168,7 @@ def render_product_performance(data: DashboardData) -> None:
         )
     rows.sort(key=lambda row: (-row["Quantity"], row["Product"]))
     table = pd.DataFrame(rows)
-    st.dataframe(table, hide_index=True, use_container_width=True)
+    st.dataframe(table, hide_index=True, width="stretch")
     st.bar_chart(pd.DataFrame(rows), x="Product", y="Quantity")
 
 
@@ -206,10 +206,10 @@ def main() -> None:
             index=default_month - 1,
             format_func=lambda month: MONTH_NAMES[month],
         )
-        if st.button("Demo month: July 2026", use_container_width=True):
+        if st.button("Demo month: July 2026", width="stretch"):
             selected_year = 2026
             selected_month = 7
-        if st.button("Refresh", use_container_width=True):
+        if st.button("Refresh", width="stretch"):
             load_dashboard_data.clear()
             st.rerun()
 

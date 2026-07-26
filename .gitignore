@@ -3,3 +3,4 @@ __pycache__/
 **/__pycache__/
 .pytest_cache/
 data/prospector_ai.db
+.agents/skills/developing-with-streamlit

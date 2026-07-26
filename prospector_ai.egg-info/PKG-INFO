@@ -1,0 +1,11 @@
+Metadata-Version: 2.4
+Name: prospector-ai
+Version: 0.1.0
+Summary: Local Streamlit MVP for sales analytics and commission projections.
+Requires-Python: >=3.11
+Requires-Dist: sqlalchemy>=2.0
+Requires-Dist: streamlit>=1.35
+Requires-Dist: pandas>=2.0
+Requires-Dist: pydantic>=2.0
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
