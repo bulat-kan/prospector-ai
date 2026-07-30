@@ -16,6 +16,19 @@ from app.validation import (
     validate_contact_identity,
     validate_lead_source,
     validate_location_fields,
+    generate_location_label,
+    normalize_company_phone,
+    normalize_contact_phone,
+    normalize_contact_title,
+    normalize_city,
+    normalize_email,
+    normalize_name,
+    normalize_street_address,
+    normalize_website,
+    normalize_zip_code,
+    validate_location_type,
+    validate_us_state,
+    validate_decision_role,
     validate_referral_partner_identity,
     validate_source_metadata,
 )
@@ -322,8 +335,8 @@ def create_company(
         _check_source_duplicate(session, Company, normalized_source, normalized_external_id)
         company = Company(
             name=clean_name,
-            website=clean_optional_text(website),
-            main_phone=clean_optional_text(main_phone),
+            website=normalize_website(website),
+            main_phone=normalize_company_phone(main_phone),
             industry=clean_optional_text(industry),
             lead_source=normalized_lead_source,
             referral_partner_id=partner.id if partner else None,
@@ -406,7 +419,11 @@ def update_company(session: Session, company_id: int, **fields: object) -> Compa
                 company.referred_at = fields.get("referred_at") or datetime.now(UTC)  # type: ignore[assignment]
             if not partner:
                 company.referred_at = None
-        for attr in ("website", "main_phone", "industry", "status", "notes"):
+        if "website" in fields:
+            company.website = normalize_website(fields["website"])  # type: ignore[arg-type]
+        if "main_phone" in fields:
+            company.main_phone = normalize_company_phone(fields["main_phone"])  # type: ignore[arg-type]
+        for attr in ("industry", "status", "notes"):
             if attr in fields:
                 setattr(company, attr, clean_optional_text(fields[attr]))  # type: ignore[arg-type]
         if "is_active" in fields:
@@ -482,18 +499,22 @@ def create_location(
 ) -> LocationDTO:
     try:
         validate_location_fields(company_id, city, state, postal_code)
+        normalized_city = normalize_city(city)
+        normalized_state = validate_us_state(state)
+        normalized_postal_code = normalize_zip_code(postal_code)
+        normalized_location_type = validate_location_type(location_type)
         _ensure_company(session, company_id)
         normalized_source, normalized_external_id = _normalize_source(source_system, external_id)
         _check_source_duplicate(session, Location, normalized_source, normalized_external_id)
         location = Location(
             company_id=company_id,
-            location_name=clean_optional_text(location_name),
-            address_line_1=clean_optional_text(address_line_1) or "",
+            location_name=generate_location_label(location_name, normalized_city),
+            address_line_1=normalize_street_address(address_line_1),
             address_line_2=clean_optional_text(address_line_2),
-            city=clean_optional_text(city) or "",
-            state=(clean_optional_text(state) or "").upper(),
-            postal_code=clean_optional_text(postal_code) or "",
-            location_type=location_type,
+            city=normalized_city,
+            state=normalized_state,
+            postal_code=normalized_postal_code,
+            location_type=normalized_location_type,
             territory_status=territory_status,
             spectrum_relationship=spectrum_relationship,
             current_provider_notes=clean_optional_text(current_provider_notes),
@@ -535,7 +556,11 @@ def update_location(session: Session, location_id: int, **fields: object) -> Loc
         if "company_id" in fields:
             _ensure_company(session, fields["company_id"])  # type: ignore[arg-type]
             location.company_id = fields["company_id"]  # type: ignore[assignment]
-        validate_location_fields(location.company_id, fields.get("city", location.city), fields.get("state", location.state), fields.get("postal_code", location.postal_code))  # type: ignore[arg-type]
+        next_city = normalize_city(fields.get("city", location.city))  # type: ignore[arg-type]
+        next_state = validate_us_state(fields.get("state", location.state))  # type: ignore[arg-type]
+        next_postal_code = normalize_zip_code(fields.get("postal_code", location.postal_code))  # type: ignore[arg-type]
+        next_location_type = validate_location_type(fields["location_type"]) if "location_type" in fields else location.location_type  # type: ignore[arg-type]
+        validate_location_fields(location.company_id, next_city, next_state, next_postal_code)
         if "source_system" in fields or "external_id" in fields:
             normalized_source, normalized_external_id = _normalize_source(
                 fields.get("source_system", location.source_system),  # type: ignore[arg-type]
@@ -544,18 +569,25 @@ def update_location(session: Session, location_id: int, **fields: object) -> Loc
             _check_source_duplicate(session, Location, normalized_source, normalized_external_id, location_id)
             location.source_system = normalized_source
             location.external_id = normalized_external_id
-        for attr in ("location_name", "address_line_1", "address_line_2", "city", "state", "postal_code", "current_provider_notes"):
-            if attr in fields:
-                value = clean_optional_text(fields[attr])  # type: ignore[arg-type]
-                if attr in {"address_line_1", "city", "state", "postal_code"}:
-                    setattr(location, attr, value or "")
-                else:
-                    setattr(location, attr, value)
-        if "state" in fields and location.state:
-            location.state = location.state.upper()
-        for attr in ("location_type", "territory_status", "spectrum_relationship"):
+        if "location_name" in fields or "city" in fields:
+            location.location_name = generate_location_label(fields.get("location_name", location.location_name), next_city)  # type: ignore[arg-type]
+        if "address_line_1" in fields:
+            location.address_line_1 = normalize_street_address(fields["address_line_1"])  # type: ignore[arg-type]
+        if "address_line_2" in fields:
+            location.address_line_2 = clean_optional_text(fields["address_line_2"])  # type: ignore[arg-type]
+        if "city" in fields:
+            location.city = next_city
+        if "state" in fields:
+            location.state = next_state
+        if "postal_code" in fields:
+            location.postal_code = next_postal_code
+        if "current_provider_notes" in fields:
+            location.current_provider_notes = clean_optional_text(fields["current_provider_notes"])  # type: ignore[arg-type]
+        for attr in ("territory_status", "spectrum_relationship"):
             if attr in fields:
                 setattr(location, attr, fields[attr])
+        if "location_type" in fields:
+            location.location_type = next_location_type
         if "is_active" in fields:
             location.is_active = bool(fields["is_active"])
         if "inactive_reason" in fields:
@@ -610,18 +642,24 @@ def create_contact(
             location = _ensure_location(session, location_id)
             if location.company_id != company_id:
                 raise ValidationError("Contact location must belong to the same company.")
-        validate_contact_identity(first_name, last_name, email, phone)
+        normalized_first_name = normalize_name(first_name, "First name")
+        normalized_last_name = normalize_name(last_name, "Last name")
+        normalized_phone = normalize_contact_phone(phone)
+        normalized_email = normalize_email(email)
+        normalized_title = normalize_contact_title(job_title)
+        normalized_decision_role = validate_decision_role(decision_role)
+        validate_contact_identity(normalized_first_name, normalized_last_name, normalized_email, normalized_phone)
         normalized_source, normalized_external_id = _normalize_source(source_system, external_id)
         _check_source_duplicate(session, Contact, normalized_source, normalized_external_id)
         contact = Contact(
             company_id=company_id,
             location_id=location_id,
-            first_name=clean_optional_text(first_name),
-            last_name=clean_optional_text(last_name),
-            job_title=clean_optional_text(job_title),
-            phone=clean_optional_text(phone),
-            email=clean_optional_text(email),
-            decision_role=decision_role,
+            first_name=normalized_first_name,
+            last_name=normalized_last_name,
+            job_title=normalized_title,
+            phone=normalized_phone,
+            email=normalized_email,
+            decision_role=normalized_decision_role,
             is_primary_contact=is_primary_contact,
             notes=clean_optional_text(notes),
             source_system=normalized_source,
@@ -669,11 +707,15 @@ def update_contact(session: Session, contact_id: int, **fields: object) -> Conta
                 if location.company_id != contact.company_id:
                     raise ValidationError("Contact location must belong to the same company.")
             contact.location_id = location_id  # type: ignore[assignment]
+        next_phone = normalize_contact_phone(fields["phone"]) if "phone" in fields else contact.phone  # type: ignore[arg-type]
+        next_email = normalize_email(fields["email"]) if "email" in fields else contact.email  # type: ignore[arg-type]
+        next_first_name = normalize_name(fields["first_name"], "First name") if "first_name" in fields else contact.first_name  # type: ignore[arg-type]
+        next_last_name = normalize_name(fields["last_name"], "Last name") if "last_name" in fields else contact.last_name  # type: ignore[arg-type]
         next_values = {
-            "first_name": fields.get("first_name", contact.first_name),
-            "last_name": fields.get("last_name", contact.last_name),
-            "email": fields.get("email", contact.email),
-            "phone": fields.get("phone", contact.phone),
+            "first_name": next_first_name,
+            "last_name": next_last_name,
+            "email": next_email,
+            "phone": next_phone,
         }
         validate_contact_identity(**next_values)  # type: ignore[arg-type]
         if "source_system" in fields or "external_id" in fields:
@@ -684,11 +726,20 @@ def update_contact(session: Session, contact_id: int, **fields: object) -> Conta
             _check_source_duplicate(session, Contact, normalized_source, normalized_external_id, contact_id)
             contact.source_system = normalized_source
             contact.external_id = normalized_external_id
-        for attr in ("first_name", "last_name", "job_title", "phone", "email", "notes"):
-            if attr in fields:
-                setattr(contact, attr, clean_optional_text(fields[attr]))  # type: ignore[arg-type]
+        if "first_name" in fields:
+            contact.first_name = next_first_name
+        if "last_name" in fields:
+            contact.last_name = next_last_name
+        if "job_title" in fields:
+            contact.job_title = normalize_contact_title(fields["job_title"])  # type: ignore[arg-type]
+        if "email" in fields:
+            contact.email = next_email
+        if "notes" in fields:
+            contact.notes = clean_optional_text(fields["notes"])  # type: ignore[arg-type]
+        if "phone" in fields:
+            contact.phone = next_phone
         if "decision_role" in fields:
-            contact.decision_role = fields["decision_role"]  # type: ignore[assignment]
+            contact.decision_role = validate_decision_role(fields["decision_role"])  # type: ignore[arg-type]
         if "is_primary_contact" in fields:
             contact.is_primary_contact = bool(fields["is_primary_contact"])
         if "is_active" in fields:

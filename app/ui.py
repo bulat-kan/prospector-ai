@@ -40,6 +40,17 @@ from app.crud import (
 )
 from app.database import SessionLocal
 from app.enums import ContactRole, LocationType, SpectrumRelationship, TerritoryStatus
+from app.form_state import (
+    contact_form_key,
+    initialize_add_company_form_state,
+    initialize_contact_form_state,
+    pop_flash_message,
+    reset_add_company_form_state,
+    reset_contact_form_state,
+    set_flash_message,
+    validate_add_company_form_state,
+    validate_contact_form_state,
+)
 from app.models import Product, Sale
 from app.seed_demo import DEMO_SALES_MARKER
 from app.ui_helpers import (
@@ -54,6 +65,20 @@ from app.ui_helpers import (
     tier_label,
 )
 from app.validation import LEAD_SOURCE_AE_FOUND, LEAD_SOURCE_LABELS, LEAD_SOURCE_REFERRAL
+from app.validation import (
+    CONTACT_TITLE_OPTIONS,
+    CONTACT_TITLE_OTHER,
+    CONTACT_TITLE_PLACEHOLDER,
+    INDUSTRY_OPTIONS,
+    INDUSTRY_OTHER,
+    INDUSTRY_PLACEHOLDER,
+    LOCATION_TYPE_OPTIONS,
+    STATE_OPTIONS,
+    format_us_phone,
+    state_display_label,
+    title_selection_for_existing,
+    contact_display_name,
+)
 
 
 @dataclass(frozen=True)
@@ -278,6 +303,19 @@ def show_crud_message(error: Exception) -> None:
     st.error(str(error))
 
 
+def render_flash_message() -> None:
+    flash = pop_flash_message(st.session_state)
+    if flash is None:
+        return
+    message, level = flash
+    if level == "success":
+        st.success(message)
+    elif level == "warning":
+        st.warning(message)
+    else:
+        st.error(message)
+
+
 def company_options(search: str = ""):
     with SessionLocal() as session:
         return list_companies(session, search=search)
@@ -291,6 +329,18 @@ def lead_source_label(value: Optional[str]) -> str:
     if value is None:
         return "Not set"
     return LEAD_SOURCE_LABELS.get(value, friendly_label(value))
+
+
+def contact_name_label(first_name: Optional[str], last_name: Optional[str]) -> str:
+    return contact_display_name(first_name, last_name)
+
+
+def decision_role_label(value: ContactRole) -> str:
+    return friendly_label(value)
+
+
+def decision_role_value_label(value: str) -> str:
+    return friendly_label(ContactRole(value))
 
 
 def referral_partner_options(include_inactive: bool = False):
@@ -337,40 +387,103 @@ def render_referral_partner_inputs(prefix: str, current_partner_id: Optional[int
 
 def render_add_company_form() -> None:
     st.subheader("Add company")
-    with st.form("add_company_form", clear_on_submit=True):
-        name = st.text_input("Company name", placeholder="Acme Services LLC")
-        cols = st.columns(2)
-        main_phone = cols[0].text_input("Public phone")
-        website = cols[1].text_input("Website")
-        industry = cols[0].text_input("Industry")
-        lead_source = cols[1].selectbox("Lead source", lead_source_options(), format_func=lead_source_label)
-        referral_partner_id = None
-        new_partner_values = None
-        if lead_source == LEAD_SOURCE_REFERRAL:
-            referral_partner_id, new_partner_values = render_referral_partner_inputs("add_company")
-        notes = st.text_area("Notes")
-        submitted = st.form_submit_button("Create company", type="primary")
+    if st.session_state.get("add_company_reset_pending"):
+        reset_add_company_form_state(st.session_state)
+        st.session_state.add_company_reset_pending = False
+    initialize_add_company_form_state(st.session_state)
+    if st.session_state.get("add_company_success"):
+        st.success(st.session_state.add_company_success)
+        st.session_state.add_company_success = ""
+
+    errors = st.session_state.get("add_company_errors", {})
+    if errors.get("submit"):
+        st.error(errors["submit"])
+    st.caption("* Required fields")
+    st.text_input("Company name *", placeholder="Acme Services LLC", key="add_company_name")
+    if errors.get("name"):
+        st.error(errors["name"])
+
+    cols = st.columns(2)
+    cols[0].text_input("Public phone", key="add_company_phone", max_chars=10)
+    if st.session_state.add_company_phone and st.session_state.add_company_phone.isdigit() and len(st.session_state.add_company_phone) == 10:
+        cols[0].caption(format_us_phone(st.session_state.add_company_phone))
+    cols[1].text_input("Website", key="add_company_website", placeholder="example.com")
+    if errors.get("phone"):
+        cols[0].error(errors["phone"])
+    if errors.get("website"):
+        cols[1].error(errors["website"])
+
+    industry = cols[0].selectbox(
+        "Industry *",
+        list(INDUSTRY_OPTIONS),
+        key="add_company_industry",
+    )
+    if industry == INDUSTRY_OTHER:
+        cols[0].text_input("Other industry *", key="add_company_other_industry")
+    lead_source = cols[1].selectbox(
+        "Lead source *",
+        lead_source_options(),
+        key="add_company_lead_source",
+        format_func=lead_source_label,
+    )
+    if errors.get("industry"):
+        cols[0].error(errors["industry"])
+    if errors.get("lead_source"):
+        cols[1].error(errors["lead_source"])
+
+    if lead_source == LEAD_SOURCE_REFERRAL:
+        with st.container(border=True):
+            st.subheader("Referral partner *")
+            st.radio(
+                "Referral option",
+                ["Select existing referral partner", "Add new referral partner"],
+                key="add_company_referral_mode",
+            )
+            if st.session_state.add_company_referral_mode == "Select existing referral partner":
+                partners = referral_partner_options()
+                partner_options = [None] + [partner.id for partner in partners]
+                partner_lookup = {partner.id: partner for partner in partners}
+                st.selectbox(
+                    "Existing referral partner *",
+                    partner_options,
+                    key="add_company_referral_partner_id",
+                    format_func=lambda partner_id: "Select partner" if partner_id is None else partner_lookup[partner_id].display_name,
+                )
+            else:
+                partner_cols = st.columns(2)
+                partner_cols[0].text_input("First name", key="add_company_partner_first")
+                partner_cols[1].text_input("Last name", key="add_company_partner_last")
+                partner_cols[0].text_input("Organization", key="add_company_partner_org")
+                partner_cols[1].text_input("Role / type", key="add_company_partner_role")
+                partner_cols[0].text_input("Phone", key="add_company_partner_phone")
+                partner_cols[1].text_input("Email", key="add_company_partner_email")
+                st.checkbox("Registered Spectrum referral partner", key="add_company_partner_registered")
+                st.text_input("Spectrum partner reference", key="add_company_partner_reference")
+                st.text_area("Referral partner notes", key="add_company_partner_notes")
+            if errors.get("referral"):
+                st.error(errors["referral"])
+
+    st.text_area("Notes", key="add_company_notes")
+    submitted = st.button("Create company", type="primary")
     if submitted:
+        company_payload, partner_payload, errors = validate_add_company_form_state(st.session_state)
+        st.session_state.add_company_errors = errors
+        if errors:
+            st.rerun()
         try:
             with SessionLocal() as session:
-                if lead_source == LEAD_SOURCE_REFERRAL and new_partner_values is not None:
-                    partner = create_referral_partner(session, **new_partner_values)
-                    referral_partner_id = partner.id
-                company = create_company(
-                    session,
-                    name=name,
-                    main_phone=main_phone,
-                    website=website,
-                    industry=industry,
-                    lead_source=lead_source,
-                    referral_partner_id=referral_partner_id,
-                    notes=notes,
-                )
+                if partner_payload is not None:
+                    partner = create_referral_partner(session, **partner_payload)
+                    company_payload["referral_partner_id"] = partner.id
+                company = create_company(session, **company_payload)
             st.session_state.selected_company_id = company.id
-            st.success(f"Created {company.name}.")
+            st.session_state.add_company_success = f"Created {company.name}."
+            st.session_state.add_company_errors = {}
+            st.session_state.add_company_reset_pending = True
             st.rerun()
         except (CrudError, DuplicateRecordError, ValidationError) as exc:
-            show_crud_message(exc)
+            st.session_state.add_company_errors = {"submit": str(exc)}
+            st.error(str(exc))
 
 
 def render_browse_companies() -> None:
@@ -491,7 +604,7 @@ def render_company_overview(company_id: int) -> None:
                 try:
                     with SessionLocal() as session:
                         archive_company(session, company.id)
-                    st.success("Company archived.")
+                    set_flash_message(st.session_state, "Company archived.")
                     st.rerun()
                 except CrudError as exc:
                     show_crud_message(exc)
@@ -500,7 +613,7 @@ def render_company_overview(company_id: int) -> None:
                 try:
                     with SessionLocal() as session:
                         restore_company(session, company.id)
-                    st.success("Company restored.")
+                    set_flash_message(st.session_state, "Company restored.")
                     st.rerun()
                 except CrudError as exc:
                     show_crud_message(exc)
@@ -530,15 +643,25 @@ def render_locations_tab(company_id: int) -> None:
     st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
 
     with st.expander("Add location", expanded=False):
-        with st.form(f"add_location_{company_id}", clear_on_submit=True):
-            location_name = st.text_input("Location label")
-            address_line_1 = st.text_input("Address line 1")
-            address_line_2 = st.text_input("Address line 2")
+        with st.form(f"add_location_{company_id}"):
+            address_line_1 = st.text_input("Street address *")
+            address_line_2 = st.text_input("Suite / Unit")
             cols = st.columns(3)
-            city = cols[0].text_input("City")
-            state = cols[1].text_input("State")
-            postal_code = cols[2].text_input("ZIP code")
-            location_type = st.selectbox("Location type", list(LocationType), format_func=friendly_label)
+            city = cols[0].text_input("City *")
+            state_options = [None] + list(STATE_OPTIONS)
+            state = cols[1].selectbox(
+                "State *",
+                state_options,
+                format_func=lambda value: "Select state" if value is None else state_display_label(value),
+            )
+            postal_code = cols[2].text_input("ZIP code *", max_chars=5)
+            location_type_options = [None] + list(LOCATION_TYPE_OPTIONS)
+            location_type = st.selectbox(
+                "Location type *",
+                location_type_options,
+                format_func=lambda value: "Select location type" if value is None else value.value,
+            )
+            location_name = st.text_input("Location label (optional)")
             spectrum_relationship = st.selectbox(
                 "Spectrum customer status",
                 list(SpectrumRelationship),
@@ -550,7 +673,7 @@ def render_locations_tab(company_id: int) -> None:
     if submitted:
         try:
             with SessionLocal() as session:
-                create_location(
+                location = create_location(
                     session,
                     company_id=company_id,
                     location_name=location_name,
@@ -563,7 +686,7 @@ def render_locations_tab(company_id: int) -> None:
                     spectrum_relationship=spectrum_relationship,
                     current_provider_notes=notes,
                 )
-            st.success("Location added.")
+            set_flash_message(st.session_state, f'✅ Location "{location.location_name or "Location"}" added successfully.')
             st.rerun()
         except CrudError as exc:
             show_crud_message(exc)
@@ -587,13 +710,22 @@ def render_locations_tab(company_id: int) -> None:
                 address_line_2 = st.text_input("Address line 2", value=selected.address_line_2 or "")
                 cols = st.columns(3)
                 city = cols[0].text_input("City", value=selected.city)
-                state = cols[1].text_input("State", value=selected.state)
-                postal_code = cols[2].text_input("ZIP code", value=selected.postal_code)
+                state_options = list(STATE_OPTIONS)
+                state_index = state_options.index(selected.state) if selected.state in state_options else state_options.index("FL")
+                state = cols[1].selectbox(
+                    "State *",
+                    state_options,
+                    index=state_index,
+                    format_func=state_display_label,
+                )
+                postal_code = cols[2].text_input("ZIP code *", value=selected.postal_code, max_chars=5)
                 location_type = st.selectbox(
-                    "Location type",
-                    list(LocationType),
-                    index=list(LocationType).index(selected.location_type),
-                    format_func=friendly_label,
+                    "Location type *",
+                    list(LOCATION_TYPE_OPTIONS),
+                    index=list(LOCATION_TYPE_OPTIONS).index(selected.location_type)
+                    if selected.location_type in LOCATION_TYPE_OPTIONS
+                    else 0,
+                    format_func=lambda value: value.value,
                 )
                 spectrum_relationship = st.selectbox(
                     "Spectrum customer status",
@@ -606,7 +738,7 @@ def render_locations_tab(company_id: int) -> None:
         if submitted:
             try:
                 with SessionLocal() as session:
-                    update_location(
+                    location = update_location(
                         session,
                         selected.id,
                         location_name=location_name,
@@ -619,7 +751,7 @@ def render_locations_tab(company_id: int) -> None:
                         spectrum_relationship=spectrum_relationship,
                         current_provider_notes=notes,
                     )
-                st.success("Location updated.")
+                set_flash_message(st.session_state, f'✅ Location "{location.location_name or "Location"}" updated successfully.')
                 st.rerun()
             except CrudError as exc:
                 show_crud_message(exc)
@@ -632,8 +764,8 @@ def render_locations_tab(company_id: int) -> None:
                 if st.button("Deactivate location"):
                     try:
                         with SessionLocal() as session:
-                            deactivate_location(session, selected.id, reason)
-                        st.success("Location marked inactive.")
+                            location = deactivate_location(session, selected.id, reason)
+                        set_flash_message(st.session_state, f'✅ Location "{location.location_name or "Location"}" marked inactive.')
                         st.rerun()
                     except CrudError as exc:
                         show_crud_message(exc)
@@ -641,8 +773,8 @@ def render_locations_tab(company_id: int) -> None:
                 if st.button("Restore location"):
                     try:
                         with SessionLocal() as session:
-                            restore_location(session, selected.id)
-                        st.success("Location restored.")
+                            location = restore_location(session, selected.id)
+                        set_flash_message(st.session_state, f'✅ Location "{location.location_name or "Location"}" restored successfully.')
                         st.rerun()
                     except CrudError as exc:
                         show_crud_message(exc)
@@ -653,14 +785,17 @@ def render_contacts_tab(company_id: int) -> None:
         with SessionLocal() as session:
             include_inactive = st.toggle("Show inactive contacts", value=False, key=f"show_inactive_contacts_{company_id}")
             contacts = list_company_contacts(session, company_id, include_inactive=include_inactive)
-            locations = list_company_locations(session, company_id)
+            locations = list_company_locations(session, company_id, include_inactive=True)
     except CrudError as exc:
         show_crud_message(exc)
         return
-    location_lookup = {location.id: location.location_name or location.address_line_1 for location in locations}
+    location_lookup = {
+        location.id: f"{location.location_name or location.address_line_1}{' (inactive)' if not location.is_active else ''}"
+        for location in locations
+    }
     rows = [
         {
-            "Name": f"{contact.first_name or ''} {contact.last_name or ''}".strip() or contact.email or contact.phone or "",
+            "Name": contact_name_label(contact.first_name, contact.last_name),
             "Title": contact.job_title or "",
             "Phone": format_phone(contact.phone),
             "Email": contact.email or "",
@@ -674,39 +809,94 @@ def render_contacts_tab(company_id: int) -> None:
     st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
     location_options = [None] + [location.id for location in locations]
     location_label = lambda location_id: "Unassigned" if location_id is None else next(
-        (location.location_name or location.address_line_1 for location in locations if location.id == location_id),
+        (
+            f"{location.location_name or location.address_line_1}{' (inactive)' if not location.is_active else ''}"
+            for location in locations
+            if location.id == location_id
+        ),
         str(location_id),
     )
 
     with st.expander("Add contact", expanded=False):
-        with st.form(f"add_contact_{company_id}", clear_on_submit=True):
+        add_prefix = f"add_contact_{company_id}"
+        if st.session_state.get(f"{add_prefix}_reset_pending"):
+            reset_contact_form_state(st.session_state, add_prefix)
+            st.session_state[f"{add_prefix}_reset_pending"] = False
+        initialize_contact_form_state(st.session_state, add_prefix)
+        add_errors = st.session_state.get(f"{add_prefix}_errors", {})
+        with st.form(f"add_contact_form_{company_id}"):
+            st.caption("At least a first name or last name is required.")
             cols = st.columns(2)
-            first_name = cols[0].text_input("First name")
-            last_name = cols[1].text_input("Last name")
-            job_title = cols[0].text_input("Title")
-            location_id = cols[1].selectbox("Assigned location", location_options, format_func=location_label)
-            phone = cols[0].text_input("Phone")
-            email = cols[1].text_input("Email")
-            is_decision_maker = st.checkbox("Decision-maker contact")
-            notes = st.text_area("Notes")
+            cols[0].text_input("First name", key=contact_form_key(add_prefix, "first_name"))
+            cols[1].text_input("Last name", key=contact_form_key(add_prefix, "last_name"))
+            if add_errors.get("name"):
+                st.error(add_errors["name"])
+            title_selection = cols[0].selectbox(
+                "Title",
+                list(CONTACT_TITLE_OPTIONS),
+                key=contact_form_key(add_prefix, "title_selection"),
+            )
+            if title_selection == CONTACT_TITLE_OTHER:
+                cols[0].text_input("Other title", key=contact_form_key(add_prefix, "other_title"))
+                if add_errors.get("title"):
+                    cols[0].error(add_errors["title"])
+            current_location = st.session_state.get(contact_form_key(add_prefix, "location_id"))
+            location_index = location_options.index(current_location) if current_location in location_options else 0
+            cols[1].selectbox(
+                "Assigned location",
+                location_options,
+                index=location_index,
+                format_func=location_label,
+                key=contact_form_key(add_prefix, "location_id"),
+            )
+            cols[0].text_input("Phone", key=contact_form_key(add_prefix, "phone"), max_chars=10)
+            phone_value = st.session_state.get(contact_form_key(add_prefix, "phone"))
+            if phone_value and str(phone_value).isdigit() and len(str(phone_value)) == 10:
+                cols[0].caption(format_phone(str(phone_value)))
+            if add_errors.get("phone"):
+                cols[0].error(add_errors["phone"])
+            cols[1].text_input("Email", key=contact_form_key(add_prefix, "email"))
+            if add_errors.get("email"):
+                cols[1].error(add_errors["email"])
+            role_values = [role.value for role in ContactRole]
+            role_current = st.session_state.get(contact_form_key(add_prefix, "decision_role"), ContactRole.UNKNOWN.value)
+            role_index = role_values.index(str(role_current)) if str(role_current) in role_values else 0
+            st.selectbox(
+                "Decision role *",
+                role_values,
+                index=role_index,
+                format_func=decision_role_value_label,
+                key=contact_form_key(add_prefix, "decision_role"),
+            )
+            if add_errors.get("decision_role"):
+                st.error(add_errors["decision_role"])
+            st.checkbox("Primary contact", key=contact_form_key(add_prefix, "is_primary_contact"))
+            st.text_area("Notes", key=contact_form_key(add_prefix, "notes"))
             submitted = st.form_submit_button("Add contact", type="primary")
     if submitted:
+        payload, errors = validate_contact_form_state(st.session_state, add_prefix)
+        st.session_state[f"{add_prefix}_errors"] = errors
+        if errors:
+            st.rerun()
         try:
             with SessionLocal() as session:
                 create_contact(
                     session,
                     company_id=company_id,
-                    location_id=location_id,
-                    first_name=first_name,
-                    last_name=last_name,
-                    job_title=job_title,
-                    phone=phone,
-                    email=email,
-                    decision_role=ContactRole.DECISION_MAKER if is_decision_maker else ContactRole.UNKNOWN,
-                    is_primary_contact=is_decision_maker,
-                    notes=notes,
+                    location_id=payload["location_id"],
+                    first_name=payload["first_name"],
+                    last_name=payload["last_name"],
+                    job_title=payload["job_title"],
+                    phone=payload["phone"],
+                    email=payload["email"],
+                    decision_role=payload["decision_role"],
+                    is_primary_contact=bool(payload["is_primary_contact"]),
+                    notes=payload["notes"],
                 )
-            st.success("Contact added.")
+            name = contact_name_label(payload.get("first_name"), payload.get("last_name"))
+            st.session_state[f"{add_prefix}_errors"] = {}
+            st.session_state[f"{add_prefix}_reset_pending"] = True
+            set_flash_message(st.session_state, f'✅ Contact "{name}" added successfully.')
             st.rerun()
         except CrudError as exc:
             show_crud_message(exc)
@@ -728,38 +918,97 @@ def render_contacts_tab(company_id: int) -> None:
         )
         selected = next(contact for contact in contacts if contact.id == selected_contact_id)
         with st.expander("Selected contact edit form", expanded=False):
-            with st.form(f"edit_contact_{selected.id}"):
+            edit_prefix = f"edit_contact_{selected.id}"
+            initialize_contact_form_state(
+                st.session_state,
+                edit_prefix,
+                {
+                    "first_name": selected.first_name or "",
+                    "last_name": selected.last_name or "",
+                    "title_selection": title_selection_for_existing(selected.job_title)[0],
+                    "other_title": title_selection_for_existing(selected.job_title)[1],
+                    "location_id": selected.location_id,
+                    "phone": selected.phone or "",
+                    "email": selected.email or "",
+                    "decision_role": selected.decision_role.value,
+                    "is_primary_contact": selected.is_primary_contact,
+                    "notes": selected.notes or "",
+                },
+            )
+            edit_errors = st.session_state.get(f"{edit_prefix}_errors", {})
+            with st.form(f"edit_contact_form_{selected.id}"):
+                st.caption("At least a first name or last name is required.")
                 cols = st.columns(2)
-                first_name = cols[0].text_input("First name", value=selected.first_name or "")
-                last_name = cols[1].text_input("Last name", value=selected.last_name or "")
-                job_title = cols[0].text_input("Title", value=selected.job_title or "")
-                location_index = location_options.index(selected.location_id) if selected.location_id in location_options else 0
-                location_id = cols[1].selectbox("Assigned location", location_options, index=location_index, format_func=location_label)
-                phone = cols[0].text_input("Phone", value=selected.phone or "")
-                email = cols[1].text_input("Email", value=selected.email or "")
-                is_decision_maker = st.checkbox(
-                    "Decision-maker contact",
-                    value=selected.decision_role == ContactRole.DECISION_MAKER or selected.is_primary_contact,
+                cols[0].text_input("First name", key=contact_form_key(edit_prefix, "first_name"))
+                cols[1].text_input("Last name", key=contact_form_key(edit_prefix, "last_name"))
+                if edit_errors.get("name"):
+                    st.error(edit_errors["name"])
+                edit_title_selection = cols[0].selectbox(
+                    "Title",
+                    list(CONTACT_TITLE_OPTIONS),
+                    key=contact_form_key(edit_prefix, "title_selection"),
                 )
-                notes = st.text_area("Notes", value=selected.notes or "")
+                if edit_title_selection == CONTACT_TITLE_OTHER:
+                    cols[0].text_input("Other title", key=contact_form_key(edit_prefix, "other_title"))
+                    if edit_errors.get("title"):
+                        cols[0].error(edit_errors["title"])
+                current_location = st.session_state.get(contact_form_key(edit_prefix, "location_id"))
+                location_index = location_options.index(current_location) if current_location in location_options else 0
+                cols[1].selectbox(
+                    "Assigned location",
+                    location_options,
+                    index=location_index,
+                    format_func=location_label,
+                    key=contact_form_key(edit_prefix, "location_id"),
+                )
+                cols[0].text_input("Phone", key=contact_form_key(edit_prefix, "phone"), max_chars=10)
+                edit_phone_value = st.session_state.get(contact_form_key(edit_prefix, "phone"))
+                if edit_phone_value and str(edit_phone_value).isdigit() and len(str(edit_phone_value)) == 10:
+                    cols[0].caption(format_phone(str(edit_phone_value)))
+                if edit_errors.get("phone"):
+                    cols[0].error(edit_errors["phone"])
+                cols[1].text_input("Email", key=contact_form_key(edit_prefix, "email"))
+                if edit_errors.get("email"):
+                    cols[1].error(edit_errors["email"])
+                role_values = [role.value for role in ContactRole]
+                edit_role_current = st.session_state.get(contact_form_key(edit_prefix, "decision_role"), ContactRole.UNKNOWN)
+                edit_role_value = edit_role_current.value if isinstance(edit_role_current, ContactRole) else str(edit_role_current)
+                edit_role_index = role_values.index(edit_role_value) if edit_role_value in role_values else 0
+                st.selectbox(
+                    "Decision role *",
+                    role_values,
+                    index=edit_role_index,
+                    format_func=decision_role_value_label,
+                    key=contact_form_key(edit_prefix, "decision_role"),
+                )
+                if edit_errors.get("decision_role"):
+                    st.error(edit_errors["decision_role"])
+                st.checkbox("Primary contact", key=contact_form_key(edit_prefix, "is_primary_contact"))
+                st.text_area("Notes", key=contact_form_key(edit_prefix, "notes"))
                 submitted = st.form_submit_button("Save contact", type="primary")
         if submitted:
+            payload, errors = validate_contact_form_state(st.session_state, edit_prefix)
+            st.session_state[f"{edit_prefix}_errors"] = errors
+            if errors:
+                st.rerun()
             try:
                 with SessionLocal() as session:
                     update_contact(
                         session,
                         selected.id,
-                        location_id=location_id,
-                        first_name=first_name,
-                        last_name=last_name,
-                        job_title=job_title,
-                        phone=phone,
-                        email=email,
-                        decision_role=ContactRole.DECISION_MAKER if is_decision_maker else ContactRole.UNKNOWN,
-                        is_primary_contact=is_decision_maker,
-                        notes=notes,
+                        location_id=payload["location_id"],
+                        first_name=payload["first_name"],
+                        last_name=payload["last_name"],
+                        job_title=payload["job_title"],
+                        phone=payload["phone"],
+                        email=payload["email"],
+                        decision_role=payload["decision_role"],
+                        is_primary_contact=bool(payload["is_primary_contact"]),
+                        notes=payload["notes"],
                     )
-                st.success("Contact updated.")
+                name = contact_name_label(payload.get("first_name"), payload.get("last_name"))
+                st.session_state[f"{edit_prefix}_errors"] = {}
+                set_flash_message(st.session_state, f'✅ Contact "{name}" updated successfully.')
                 st.rerun()
             except CrudError as exc:
                 show_crud_message(exc)
@@ -770,7 +1019,10 @@ def render_contacts_tab(company_id: int) -> None:
                     try:
                         with SessionLocal() as session:
                             deactivate_contact(session, selected.id, reason)
-                        st.success("Contact marked inactive.")
+                        set_flash_message(
+                            st.session_state,
+                            f'✅ Contact "{contact_name_label(selected.first_name, selected.last_name)}" marked as no longer with the company.',
+                        )
                         st.rerun()
                     except CrudError as exc:
                         show_crud_message(exc)
@@ -779,7 +1031,10 @@ def render_contacts_tab(company_id: int) -> None:
                     try:
                         with SessionLocal() as session:
                             restore_contact(session, selected.id)
-                        st.success("Contact restored.")
+                        set_flash_message(
+                            st.session_state,
+                            f'✅ Contact "{contact_name_label(selected.first_name, selected.last_name)}" restored successfully.',
+                        )
                         st.rerun()
                     except CrudError as exc:
                         show_crud_message(exc)
@@ -813,6 +1068,7 @@ def render_company_detail() -> None:
 
 def render_companies_page() -> None:
     st.header("Companies")
+    render_flash_message()
     browse_tab, add_tab, detail_tab = st.tabs(["Browse companies", "Add company", "Company detail"])
     with browse_tab:
         render_browse_companies()

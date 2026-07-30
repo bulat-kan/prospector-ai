@@ -41,7 +41,7 @@ def test_company_archive_preserves_children_and_filters_by_default(db_session) -
         city="Spring Hill",
         state="FL",
         postal_code="34609",
-        location_type=LocationType.COMMERCIAL,
+        location_type=LocationType.SMB,
     )
     contact = create_contact(db_session, company_id=company.id, first_name="Alex")
 
@@ -80,7 +80,7 @@ def test_location_deactivate_and_restore_preserves_relationships(db_session) -> 
         city="Spring Hill",
         state="FL",
         postal_code="34609",
-        location_type=LocationType.COMMERCIAL,
+        location_type=LocationType.SMB,
     )
 
     inactive = deactivate_location(db_session, location.id, "Closed")
@@ -217,7 +217,7 @@ def test_archive_defaults_are_active_on_new_records(db_session) -> None:
         city="Spring Hill",
         state="FL",
         postal_code="34609",
-        location_type=LocationType.COMMERCIAL,
+        location_type=LocationType.SMB,
     )
     contact = create_contact(db_session, company_id=company.id, first_name="Casey", decision_role=ContactRole.UNKNOWN)
 

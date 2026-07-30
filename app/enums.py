@@ -2,6 +2,7 @@ from enum import Enum
 
 
 class LocationType(str, Enum):
+    SMB = "SMB"
     COMMERCIAL = "COMMERCIAL"
     RESIDENTIAL = "RESIDENTIAL"
     SOHO = "SOHO"

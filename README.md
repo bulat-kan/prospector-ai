@@ -57,6 +57,22 @@ and restored without deleting related locations, contacts, opportunities,
 activities, tasks, or sales. Contacts and locations can be marked inactive and
 restored while preserving historical relationships.
 
+Contact data quality rules:
+
+- Contact email is optional, but supplied values must look like
+  `name@company.com` and are stored lowercase.
+- At least a first name or last name is required. Names are trimmed, repeated
+  spaces are collapsed, and common capitalization is normalized while preserving
+  apostrophes and hyphens.
+- Contact title is selected from common CRM titles. `Other` stores the supplied
+  custom title, and existing custom titles remain editable as `Other`.
+- Decision Role is separate from Primary Contact. Decision Role can be Unknown,
+  Decision Maker, Influencer, or Gatekeeper. Primary Contact is a separate
+  checkbox and does not imply decision-maker status.
+- Assigned Location defaults to Unassigned. Stored values use nullable
+  `location_id`; inactive assigned locations remain historically linked and are
+  shown with an inactive indicator.
+
 Lead source is standardized to `AE Found` or `Referral`. Referral companies
 require a referral partner. The current referral partner foundation supports
 creating or selecting partners from company create/edit forms and stores partner
@@ -65,6 +81,52 @@ status.
 
 No referral compensation, payment, cash, lunch expense, referral analytics,
 Opportunities UI, or Sales UI is included in this sprint.
+
+## Data Quality Audit
+
+Run an audit without modifying data:
+
+```bash
+python -m app.audit_data
+```
+
+The audit reports company, location, and contact issues by record type and ID.
+It makes no changes by default and returns a nonzero status when issues are
+found. `--fix` is intentionally deferred for now; cleanup should be performed
+explicitly after reviewing the audit output.
+
+Validation responsibility:
+
+- UI: field-specific messages, conditional fields, preserving form values, and
+  friendly formatting.
+- CRUD: business validation, normalization, rollback safety, and domain
+  `ValidationError` handling.
+- Database: existing SQLAlchemy field types, foreign keys, enum storage, and
+  safe additive schema compatibility. Complex email/name/location cleanup rules
+  remain in CRUD/audit rather than SQLite constraints to avoid unsafe table
+  rebuilds against legacy local data.
+
+## Development Reset
+
+To deliberately recreate the local development SQLite database and reseed demo
+data:
+
+```bash
+python -m app.reset_demo_data --yes
+```
+
+Without `--yes`, the command prints the target database path and exits without
+changing data. The reset command is destructive, development-only, validates
+that it is operating on the project-local `data/prospector_ai.db`, disposes the
+SQLAlchemy engine, removes the SQLite file, initializes the schema, and reseeds
+demo data. Stop Streamlit first if it is running and holding the SQLite file.
+Reset is never run from app startup, `init_db`, or `seed_demo`.
+
+Validate the reset result with:
+
+```bash
+python -m app.audit_data
+```
 
 ## Salesforce Import Foundation
 

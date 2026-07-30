@@ -2,7 +2,7 @@ from decimal import Decimal
 from enum import Enum
 from typing import Optional
 
-from app.validation import LEAD_SOURCE_LABELS
+from app.validation import LEAD_SOURCE_LABELS, format_phone_display
 
 
 MONTH_NAMES = {
@@ -66,14 +66,7 @@ def friendly_label(value: object) -> str:
 
 
 def format_phone(value: Optional[str]) -> str:
-    if not value:
-        return ""
-    digits = "".join(character for character in value if character.isdigit())
-    if len(digits) == 10:
-        return f"({digits[:3]}) {digits[3:6]}-{digits[6:]}"
-    if len(digits) == 11 and digits.startswith("1"):
-        return f"+1 ({digits[1:4]}) {digits[4:7]}-{digits[7:]}"
-    return value
+    return format_phone_display(value)
 
 
 def normalize_website_url(value: Optional[str]) -> str:

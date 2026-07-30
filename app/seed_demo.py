@@ -244,7 +244,7 @@ def seed_demo(session: Session) -> bool:
 
     company = Company(
         name=COMPANY_NAME,
-        main_phone="727-555-0198",
+        main_phone="7275550198",
         industry="Plumbing services",
         lead_source=LEAD_SOURCE_AE_FOUND,
         estimated_employees=12,
@@ -260,7 +260,7 @@ def seed_demo(session: Session) -> bool:
         city="Spring Hill",
         state="FL",
         postal_code="34606",
-        location_type=LocationType.COMMERCIAL,
+        location_type=LocationType.SMB,
         territory_status=TerritoryStatus.INSIDE,
         spectrum_relationship=SpectrumRelationship.EXISTING,
         business_use_confirmed=True,
@@ -288,7 +288,7 @@ def seed_demo(session: Session) -> bool:
         first_name="John",
         last_name="Carter",
         job_title="Owner",
-        phone="727-555-0142",
+        phone="7275550142",
         email="john.carter@example.com",
         decision_role=ContactRole.DECISION_MAKER,
         preferred_contact_method="phone",
@@ -600,7 +600,7 @@ def print_configuration_summary(session: Session) -> None:
     print(f"Number of July 2026 demo sales: {sale_count}")
 
 
-if __name__ == "__main__":
+def seed_demo_data() -> None:
     from app.init_db import init_db
 
     init_db()
@@ -613,3 +613,11 @@ if __name__ == "__main__":
         seed_demo_sales(session)
         print_demo_summary(session)
         print_configuration_summary(session)
+
+
+def main() -> None:
+    seed_demo_data()
+
+
+if __name__ == "__main__":
+    main()
