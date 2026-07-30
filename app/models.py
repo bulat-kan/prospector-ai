@@ -16,6 +16,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -36,6 +37,15 @@ from app.enums import (
     TaskStatus,
     TaskType,
     TerritoryStatus,
+)
+
+
+LOCATION_INACTIVE_REASONS = (
+    "Closed",
+    "Relocated",
+    "No longer serviced",
+    "Duplicate / entered by mistake",
+    "Other",
 )
 
 
@@ -64,18 +74,35 @@ def enum_column(enum_type: type, **kwargs: object) -> SQLEnum:
 
 class Company(TimestampMixin, Base):
     __tablename__ = "companies"
+    __table_args__ = (
+        Index(
+            "uq_companies_source_external_id",
+            "source_system",
+            "external_id",
+            unique=True,
+            sqlite_where=text("source_system IS NOT NULL AND external_id IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     website: Mapped[Optional[str]] = mapped_column(String(255))
     main_phone: Mapped[Optional[str]] = mapped_column(String(50), index=True)
     industry: Mapped[Optional[str]] = mapped_column(String(120), index=True)
+    lead_source: Mapped[Optional[str]] = mapped_column(String(120), index=True)
+    lead_source_legacy: Mapped[Optional[str]] = mapped_column(String(120))
+    referral_partner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("referral_partners.id"), index=True)
+    referred_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), index=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
     estimated_employees: Mapped[Optional[int]] = mapped_column(Integer)
     estimated_mobile_lines: Mapped[Optional[int]] = mapped_column(Integer)
     estimated_fleet_size: Mapped[Optional[int]] = mapped_column(Integer)
     status: Mapped[Optional[str]] = mapped_column(String(80), index=True)
     notes: Mapped[Optional[str]] = mapped_column(Text)
     ai_summary: Mapped[Optional[str]] = mapped_column(Text)
+    source_system: Mapped[Optional[str]] = mapped_column(String(80), index=True)
+    external_id: Mapped[Optional[str]] = mapped_column(String(160), index=True)
+    last_imported_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     locations: Mapped[list["Location"]] = relationship(
         back_populates="company",
@@ -105,9 +132,46 @@ class Company(TimestampMixin, Base):
         back_populates="company",
         cascade="all, delete-orphan",
     )
+    referral_partner: Mapped[Optional["ReferralPartner"]] = relationship(back_populates="companies")
 
     def __repr__(self) -> str:
         return f"Company(id={self.id!r}, name={self.name!r})"
+
+
+class ReferralPartner(TimestampMixin, Base):
+    __tablename__ = "referral_partners"
+    __table_args__ = (
+        Index("ix_referral_partners_name", "last_name", "first_name"),
+        Index(
+            "uq_referral_partners_source_external_id",
+            "source_system",
+            "external_id",
+            unique=True,
+            sqlite_where=text("source_system IS NOT NULL AND external_id IS NOT NULL"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    first_name: Mapped[Optional[str]] = mapped_column(String(120))
+    last_name: Mapped[Optional[str]] = mapped_column(String(120))
+    organization: Mapped[Optional[str]] = mapped_column(String(160), index=True)
+    role_or_type: Mapped[Optional[str]] = mapped_column(String(120))
+    phone: Mapped[Optional[str]] = mapped_column(String(50), index=True)
+    email: Mapped[Optional[str]] = mapped_column(String(255), index=True)
+    is_registered_spectrum_partner: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    spectrum_partner_reference: Mapped[Optional[str]] = mapped_column(String(160), index=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+    source_system: Mapped[Optional[str]] = mapped_column(String(80), index=True)
+    external_id: Mapped[Optional[str]] = mapped_column(String(160), index=True)
+    last_imported_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+
+    companies: Mapped[list["Company"]] = relationship(back_populates="referral_partner")
+    activities: Mapped[list["Activity"]] = relationship(back_populates="referral_partner")
+
+    def __repr__(self) -> str:
+        label = self.organization or " ".join(value for value in (self.first_name, self.last_name) if value)
+        return f"ReferralPartner(id={self.id!r}, label={label!r})"
 
 
 class Product(Base):
@@ -181,6 +245,8 @@ class CommissionTier(Base):
     video_rate: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     mrr_percentage: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
     display_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    display_name: Mapped[Optional[str]] = mapped_column(String(80))
+    display_icon: Mapped[Optional[str]] = mapped_column(String(16))
 
     commission_plan: Mapped["CommissionPlan"] = relationship(back_populates="tiers")
 
@@ -198,6 +264,13 @@ class Location(TimestampMixin, Base):
             name="uq_locations_company_address_postal",
         ),
         Index("ix_locations_city_state", "city", "state"),
+        Index(
+            "uq_locations_source_external_id",
+            "source_system",
+            "external_id",
+            unique=True,
+            sqlite_where=text("source_system IS NOT NULL AND external_id IS NOT NULL"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -223,10 +296,16 @@ class Location(TimestampMixin, Base):
     )
     business_use_confirmed: Mapped[Optional[bool]] = mapped_column(Boolean)
     is_primary_business_location: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+    inactive_reason: Mapped[Optional[str]] = mapped_column(String(120))
+    inactive_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), index=True)
     latitude: Mapped[Optional[float]] = mapped_column(Float)
     longitude: Mapped[Optional[float]] = mapped_column(Float)
     current_provider_notes: Mapped[Optional[str]] = mapped_column(Text)
     ai_summary: Mapped[Optional[str]] = mapped_column(Text)
+    source_system: Mapped[Optional[str]] = mapped_column(String(80), index=True)
+    external_id: Mapped[Optional[str]] = mapped_column(String(160), index=True)
+    last_imported_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     company: Mapped["Company"] = relationship(back_populates="locations")
     contacts: Mapped[list["Contact"]] = relationship(back_populates="location")
@@ -248,6 +327,13 @@ class Contact(TimestampMixin, Base):
     __table_args__ = (
         Index("ix_contacts_name", "last_name", "first_name"),
         Index("ix_contacts_company_primary", "company_id", "is_primary_contact"),
+        Index(
+            "uq_contacts_source_external_id",
+            "source_system",
+            "external_id",
+            unique=True,
+            sqlite_where=text("source_system IS NOT NULL AND external_id IS NOT NULL"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -266,8 +352,14 @@ class Contact(TimestampMixin, Base):
     )
     preferred_contact_method: Mapped[Optional[str]] = mapped_column(String(50))
     is_primary_contact: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+    inactive_reason: Mapped[Optional[str]] = mapped_column(String(120))
+    inactive_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), index=True)
     notes: Mapped[Optional[str]] = mapped_column(Text)
     ai_summary: Mapped[Optional[str]] = mapped_column(Text)
+    source_system: Mapped[Optional[str]] = mapped_column(String(80), index=True)
+    external_id: Mapped[Optional[str]] = mapped_column(String(160), index=True)
+    last_imported_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     company: Mapped["Company"] = relationship(back_populates="contacts")
     location: Mapped[Optional["Location"]] = relationship(back_populates="contacts")
@@ -382,6 +474,7 @@ class Activity(TimestampMixin, Base):
     location_id: Mapped[Optional[int]] = mapped_column(ForeignKey("locations.id"), index=True)
     contact_id: Mapped[Optional[int]] = mapped_column(ForeignKey("contacts.id"), index=True)
     opportunity_id: Mapped[Optional[int]] = mapped_column(ForeignKey("opportunities.id"), index=True)
+    referral_partner_id: Mapped[Optional[int]] = mapped_column(ForeignKey("referral_partners.id"), index=True)
     activity_type: Mapped[ActivityType] = mapped_column(enum_column(ActivityType), nullable=False, index=True)
     activity_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     outcome: Mapped[Optional[ActivityOutcome]] = mapped_column(enum_column(ActivityOutcome), index=True)
@@ -398,6 +491,7 @@ class Activity(TimestampMixin, Base):
     location: Mapped[Optional["Location"]] = relationship(back_populates="activities")
     contact: Mapped[Optional["Contact"]] = relationship(back_populates="activities")
     opportunity: Mapped[Optional["Opportunity"]] = relationship(back_populates="activities")
+    referral_partner: Mapped[Optional["ReferralPartner"]] = relationship(back_populates="activities")
 
 
 class Task(TimestampMixin, Base):

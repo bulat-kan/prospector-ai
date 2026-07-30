@@ -1,6 +1,17 @@
 from decimal import Decimal
 
-from app.ui_helpers import calculate_progress, clamp_progress, format_currency, format_percentage, month_label, tier_label
+from app.enums import ContactRole
+from app.ui_helpers import (
+    calculate_progress,
+    clamp_progress,
+    format_currency,
+    format_percentage,
+    format_phone,
+    friendly_label,
+    month_label,
+    normalize_website_url,
+    tier_label,
+)
 
 
 def test_currency_formatting() -> None:
@@ -38,3 +49,13 @@ def test_decimal_values_format_correctly() -> None:
 
 def test_tier_label_uses_en_dash() -> None:
     assert tier_label("5-9") == "5–9"
+
+
+def test_friendly_label_formats_enums_and_lead_source() -> None:
+    assert friendly_label(ContactRole.DECISION_MAKER) == "Decision Maker"
+    assert friendly_label("AE_FOUND") == "AE Found"
+
+
+def test_phone_and_website_display_helpers() -> None:
+    assert format_phone("7275550100") == "(727) 555-0100"
+    assert normalize_website_url("example.com") == "https://example.com"

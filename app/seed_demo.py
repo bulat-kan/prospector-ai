@@ -36,6 +36,7 @@ from app.models import (
     Service,
     Task,
 )
+from app.validation import LEAD_SOURCE_AE_FOUND
 
 
 COMPANY_NAME = "Sunshine Plumbing LLC"
@@ -129,6 +130,15 @@ COMMISSION_TIERS = [
     ("30+", 30, None, "300.00", "250.00", "200.00", "180.00", "100.00"),
 ]
 
+COMMISSION_TIER_PRESENTATION = {
+    "5-9": ("Bronze", "🥉"),
+    "10-14": ("Silver", "🥈"),
+    "15-19": ("Gold", "🥇"),
+    "20-24": ("Platinum", "💠"),
+    "25-29": ("Diamond", "💎"),
+    "30+": ("Legend", "👑"),
+}
+
 
 def seed_products(session: Session) -> int:
     created = 0
@@ -189,9 +199,13 @@ def seed_commission_plan(session: Session) -> tuple[bool, int]:
         created_plan = True
 
     existing_tier_names = {tier.tier_name for tier in plan.tiers}
+    existing_tiers = {tier.tier_name: tier for tier in plan.tiers}
     for display_order, tier_data in enumerate(COMMISSION_TIERS, start=1):
         tier_name, minimum, maximum, internet, mobile, voice, video, mrr = tier_data
+        display_name, display_icon = COMMISSION_TIER_PRESENTATION[tier_name]
         if tier_name in existing_tier_names:
+            existing_tiers[tier_name].display_name = display_name
+            existing_tiers[tier_name].display_icon = display_icon
             continue
 
         session.add(
@@ -206,6 +220,8 @@ def seed_commission_plan(session: Session) -> tuple[bool, int]:
                 video_rate=Decimal(video),
                 mrr_percentage=Decimal(mrr),
                 display_order=display_order,
+                display_name=display_name,
+                display_icon=display_icon,
             )
         )
         created_tiers += 1
@@ -230,6 +246,7 @@ def seed_demo(session: Session) -> bool:
         name=COMPANY_NAME,
         main_phone="727-555-0198",
         industry="Plumbing services",
+        lead_source=LEAD_SOURCE_AE_FOUND,
         estimated_employees=12,
         estimated_mobile_lines=8,
         status="prospect_review",

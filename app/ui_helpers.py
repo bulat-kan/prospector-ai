@@ -1,5 +1,8 @@
 from decimal import Decimal
+from enum import Enum
 from typing import Optional
+
+from app.validation import LEAD_SOURCE_LABELS
 
 
 MONTH_NAMES = {
@@ -49,3 +52,34 @@ def tier_label(value: Optional[str]) -> str:
     if not value:
         return "Below threshold"
     return value.replace("-", "–")
+
+
+def friendly_label(value: object) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, Enum):
+        value = value.value
+    text = str(value)
+    if text in LEAD_SOURCE_LABELS:
+        return LEAD_SOURCE_LABELS[text]
+    return text.replace("_", " ").title()
+
+
+def format_phone(value: Optional[str]) -> str:
+    if not value:
+        return ""
+    digits = "".join(character for character in value if character.isdigit())
+    if len(digits) == 10:
+        return f"({digits[:3]}) {digits[3:6]}-{digits[6:]}"
+    if len(digits) == 11 and digits.startswith("1"):
+        return f"+1 ({digits[1:4]}) {digits[4:7]}-{digits[7:]}"
+    return value
+
+
+def normalize_website_url(value: Optional[str]) -> str:
+    if not value:
+        return ""
+    stripped = value.strip()
+    if stripped.startswith(("http://", "https://")):
+        return stripped
+    return f"https://{stripped}"
