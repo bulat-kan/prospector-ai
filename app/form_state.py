@@ -1,18 +1,19 @@
 from typing import Any, MutableMapping, Optional
 
-from app.validation import (
+from app.constants import (
     CONTACT_TITLE_PLACEHOLDER,
-    CONTACT_TITLE_OTHER,
-    INDUSTRY_OTHER,
     INDUSTRY_PLACEHOLDER,
     LEAD_SOURCE_AE_FOUND,
     LEAD_SOURCE_REFERRAL,
+)
+from app.validation import (
     clean_optional_text,
     normalize_company_phone,
     normalize_contact_phone,
     normalize_contact_title,
     normalize_email,
     normalize_name,
+    normalize_phone,
     normalize_website,
     validate_company_name,
     validate_industry_selection,
@@ -42,6 +43,8 @@ ADD_COMPANY_DEFAULTS: dict[str, Any] = {
     "add_company_partner_registered": False,
     "add_company_partner_reference": "",
     "add_company_partner_notes": "",
+    "add_company_referral_phone_error": "",
+    "add_company_referral_email_error": "",
 }
 
 ADD_CONTACT_DEFAULTS: dict[str, Any] = {
@@ -137,16 +140,33 @@ def validate_add_company_form_state(state: MutableMapping[str, Any]) -> tuple[di
                 "spectrum_partner_reference": values["add_company_partner_reference"],
                 "notes": values["add_company_partner_notes"],
             }
+            referral_field_error = False
             try:
-                validate_referral_partner_identity(
-                    partner_payload["first_name"],
-                    partner_payload["last_name"],
-                    partner_payload["organization"],
-                    partner_payload["phone"],
-                    partner_payload["email"],
-                )
-            except ValueError:
-                errors["referral"] = "Referral partner information is incomplete."
+                partner_payload["first_name"] = normalize_name(partner_payload["first_name"], "First name")
+                partner_payload["last_name"] = normalize_name(partner_payload["last_name"], "Last name")
+            except ValueError as exc:
+                errors["referral"] = str(exc)
+            try:
+                partner_payload["phone"] = normalize_phone(partner_payload["phone"], field_name="Referral partner phone")
+            except ValueError as exc:
+                referral_field_error = True
+                errors["referral_phone"] = str(exc)
+            try:
+                partner_payload["email"] = normalize_email(partner_payload["email"], field_name="Referral partner email")
+            except ValueError as exc:
+                referral_field_error = True
+                errors["referral_email"] = str(exc)
+            if not referral_field_error:
+                try:
+                    validate_referral_partner_identity(
+                        partner_payload["first_name"],
+                        partner_payload["last_name"],
+                        partner_payload["organization"],
+                        partner_payload["phone"],
+                        partner_payload["email"],
+                    )
+                except ValueError as exc:
+                    errors["referral"] = str(exc)
 
     return company_payload, partner_payload, errors
 

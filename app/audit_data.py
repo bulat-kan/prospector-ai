@@ -10,8 +10,10 @@ from app.validation import (
     normalize_company_phone,
     normalize_contact_phone,
     normalize_email,
+    normalize_phone,
     normalize_website,
     normalize_zip_code,
+    validate_referral_partner_identity,
     validate_lead_source,
     validate_location_type,
     validate_us_state,
@@ -84,9 +86,68 @@ def audit_companies(session) -> list[AuditIssue]:
     return issues
 
 
+def audit_referral_partners(session) -> list[AuditIssue]:
+    issues: list[AuditIssue] = []
+    rows = session.execute(
+        text(
+            "SELECT id, first_name, last_name, organization, phone, email, source_system, external_id "
+            "FROM referral_partners ORDER BY id"
+        )
+    ).mappings()
+    for partner in rows:
+        for field_name in ("first_name", "last_name", "organization"):
+            value = partner[field_name]
+            if value is not None and not value.strip():
+                issues.append(
+                    AuditIssue(
+                        "Referral Partners",
+                        f"Referral Partner ID {partner['id']}: {field_name} contains only whitespace",
+                    )
+                )
+        _check(
+            lambda row=partner: validate_referral_partner_identity(
+                row["first_name"],
+                row["last_name"],
+                row["organization"],
+                row["phone"],
+                row["email"],
+            ),
+            f"Referral Partner ID {partner['id']}: missing identity",
+            issues,
+            "Referral Partners",
+        )
+        if partner["phone"]:
+            _check(
+                lambda value=partner["phone"]: normalize_phone(value, field_name="Referral partner phone"),
+                f'Referral Partner ID {partner["id"]}: invalid phone "{partner["phone"]}"',
+                issues,
+                "Referral Partners",
+            )
+        if partner["email"]:
+            _check(
+                lambda value=partner["email"]: normalize_email(value),
+                f'Referral Partner ID {partner["id"]}: invalid email "{partner["email"]}"',
+                issues,
+                "Referral Partners",
+            )
+        if bool(partner["source_system"]) != bool(partner["external_id"]):
+            issues.append(
+                AuditIssue(
+                    "Referral Partners",
+                    f"Referral Partner ID {partner['id']}: source_system and external_id must be provided together",
+                )
+            )
+    return issues
+
+
 def run_audit() -> list[AuditIssue]:
     with SessionLocal() as session:
-        return [*audit_contacts(session), *audit_locations(session), *audit_companies(session)]
+        return [
+            *audit_contacts(session),
+            *audit_locations(session),
+            *audit_companies(session),
+            *audit_referral_partners(session),
+        ]
 
 
 def main() -> int:
@@ -96,7 +157,7 @@ def main() -> int:
         return 2
     issues = run_audit()
     print("Data quality audit")
-    grouped = {"Contacts": [], "Locations": [], "Companies": []}
+    grouped = {"Contacts": [], "Locations": [], "Companies": [], "Referral Partners": []}
     for issue in issues:
         grouped.setdefault(issue.category, []).append(issue.message)
     for category, messages in grouped.items():

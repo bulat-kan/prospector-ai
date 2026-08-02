@@ -1,0 +1,173 @@
+from app.enums import ContactRole, LocationType
+
+
+PHONE_DIGIT_LENGTH = 10
+REFERRAL_PHONE_MAX_CHARS = PHONE_DIGIT_LENGTH
+
+LEAD_SOURCE_AE_FOUND = "AE_FOUND"
+LEAD_SOURCE_REFERRAL = "REFERRAL"
+LEAD_SOURCE_LABELS = {
+    LEAD_SOURCE_AE_FOUND: "AE Found",
+    LEAD_SOURCE_REFERRAL: "Referral",
+}
+LEAD_SOURCES = (LEAD_SOURCE_AE_FOUND, LEAD_SOURCE_REFERRAL)
+LEAD_SOURCE_ALIASES = {
+    "ae found": LEAD_SOURCE_AE_FOUND,
+    "ae_found": LEAD_SOURCE_AE_FOUND,
+    "aefound": LEAD_SOURCE_AE_FOUND,
+    "referral": LEAD_SOURCE_REFERRAL,
+}
+
+INDUSTRY_PLACEHOLDER = "Select industry"
+INDUSTRY_OTHER = "Other"
+INDUSTRIES = (
+    INDUSTRY_PLACEHOLDER,
+    "Automotive",
+    "Construction",
+    "Dental",
+    "Education",
+    "Financial Services",
+    "Healthcare",
+    "Hospitality",
+    "HVAC",
+    "Insurance",
+    "Legal",
+    "Manufacturing",
+    "Medical",
+    "Nonprofit",
+    "Plumbing",
+    "Professional Services",
+    "Property Management",
+    "Real Estate",
+    "Restaurant",
+    "Retail",
+    "Technology",
+    "Transportation",
+    INDUSTRY_OTHER,
+)
+
+CONTACT_TITLE_PLACEHOLDER = "Select title"
+CONTACT_TITLE_OTHER = "Other"
+CONTACT_TITLES = (
+    CONTACT_TITLE_PLACEHOLDER,
+    "Owner",
+    "Co-Owner",
+    "CEO",
+    "President",
+    "Vice President",
+    "General Manager",
+    "Office Manager",
+    "Practice Manager",
+    "Operations Manager",
+    "IT Manager",
+    "Administrator",
+    "Receptionist",
+    "Purchasing Manager",
+    "Facilities Manager",
+    CONTACT_TITLE_OTHER,
+)
+
+DECISION_ROLES = tuple(ContactRole)
+
+PRODUCT_INTERNET = "Internet"
+PRODUCT_MOBILE = "Mobile"
+PRODUCT_VOICE = "Voice"
+PRODUCT_TV = "TV"
+PRODUCT_SEASONAL_SPORTS = "Seasonal Sports"
+PRODUCT_EVERPASS = "EverPass"
+PRODUCT_MANAGED_WIFI = "Managed WiFi"
+PRODUCT_SECURITY = "Security"
+PRODUCT_OTHER = "Other"
+PRODUCT_CATALOG = (
+    PRODUCT_INTERNET,
+    PRODUCT_MOBILE,
+    PRODUCT_VOICE,
+    PRODUCT_TV,
+    PRODUCT_SEASONAL_SPORTS,
+    PRODUCT_EVERPASS,
+    PRODUCT_MANAGED_WIFI,
+    PRODUCT_SECURITY,
+    PRODUCT_OTHER,
+)
+
+COMMISSION_STATUS_PENDING_FULFILLMENT = "Pending Fulfillment"
+COMMISSION_STATUS_ELIGIBLE = "Commission Eligible"
+COMMISSION_STATUS_PAID = "Commission Paid"
+COMMISSION_STATUSES = (
+    COMMISSION_STATUS_PENDING_FULFILLMENT,
+    COMMISSION_STATUS_ELIGIBLE,
+    COMMISSION_STATUS_PAID,
+)
+
+FULFILLMENT_STATUS_PENDING = "Pending"
+FULFILLMENT_STATUS_INSTALLED = "Installed"
+FULFILLMENT_STATUS_ACTIVATED = "Activated"
+FULFILLMENT_STATUS_CANCELLED = "Cancelled"
+FULFILLMENT_STATUSES = (
+    FULFILLMENT_STATUS_PENDING,
+    FULFILLMENT_STATUS_INSTALLED,
+    FULFILLMENT_STATUS_ACTIVATED,
+    FULFILLMENT_STATUS_CANCELLED,
+)
+
+US_STATES = {
+    "AL": "Alabama",
+    "AK": "Alaska",
+    "AZ": "Arizona",
+    "AR": "Arkansas",
+    "CA": "California",
+    "CO": "Colorado",
+    "CT": "Connecticut",
+    "DE": "Delaware",
+    "FL": "Florida",
+    "GA": "Georgia",
+    "HI": "Hawaii",
+    "ID": "Idaho",
+    "IL": "Illinois",
+    "IN": "Indiana",
+    "IA": "Iowa",
+    "KS": "Kansas",
+    "KY": "Kentucky",
+    "LA": "Louisiana",
+    "ME": "Maine",
+    "MD": "Maryland",
+    "MA": "Massachusetts",
+    "MI": "Michigan",
+    "MN": "Minnesota",
+    "MS": "Mississippi",
+    "MO": "Missouri",
+    "MT": "Montana",
+    "NE": "Nebraska",
+    "NV": "Nevada",
+    "NH": "New Hampshire",
+    "NJ": "New Jersey",
+    "NM": "New Mexico",
+    "NY": "New York",
+    "NC": "North Carolina",
+    "ND": "North Dakota",
+    "OH": "Ohio",
+    "OK": "Oklahoma",
+    "OR": "Oregon",
+    "PA": "Pennsylvania",
+    "RI": "Rhode Island",
+    "SC": "South Carolina",
+    "SD": "South Dakota",
+    "TN": "Tennessee",
+    "TX": "Texas",
+    "UT": "Utah",
+    "VT": "Vermont",
+    "VA": "Virginia",
+    "WA": "Washington",
+    "WV": "West Virginia",
+    "WI": "Wisconsin",
+    "WY": "Wyoming",
+    "DC": "District of Columbia",
+}
+STATE_OPTIONS = tuple(US_STATES.keys())
+
+LOCATION_TYPES = (LocationType.SMB, LocationType.SOHO, LocationType.BAR_RESTAURANT)
+
+# Backward-compatible names used by existing UI/tests.
+INDUSTRY_OPTIONS = INDUSTRIES
+CONTACT_TITLE_OPTIONS = CONTACT_TITLES
+LOCATION_TYPE_OPTIONS = LOCATION_TYPES

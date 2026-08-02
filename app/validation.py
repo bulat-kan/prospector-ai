@@ -2,127 +2,30 @@ import re
 from urllib.parse import urlparse
 from typing import Optional
 
+from app.constants import (
+    CONTACT_TITLE_OPTIONS,
+    CONTACT_TITLE_OTHER,
+    CONTACT_TITLE_PLACEHOLDER,
+    INDUSTRIES,
+    INDUSTRY_OPTIONS,
+    INDUSTRY_OTHER,
+    INDUSTRY_PLACEHOLDER,
+    LEAD_SOURCE_AE_FOUND,
+    LEAD_SOURCE_ALIASES,
+    LEAD_SOURCE_LABELS,
+    LEAD_SOURCE_REFERRAL,
+    LOCATION_TYPE_OPTIONS,
+    PHONE_DIGIT_LENGTH,
+    US_STATES,
+)
 from app.enums import ContactRole, LocationType
 
 
-LEAD_SOURCE_AE_FOUND = "AE_FOUND"
-LEAD_SOURCE_REFERRAL = "REFERRAL"
-LEAD_SOURCE_LABELS = {
-    LEAD_SOURCE_AE_FOUND: "AE Found",
-    LEAD_SOURCE_REFERRAL: "Referral",
-}
-LEAD_SOURCE_ALIASES = {
-    "ae found": LEAD_SOURCE_AE_FOUND,
-    "ae_found": LEAD_SOURCE_AE_FOUND,
-    "aefound": LEAD_SOURCE_AE_FOUND,
-    "referral": LEAD_SOURCE_REFERRAL,
-}
-INDUSTRY_PLACEHOLDER = "Select industry"
-INDUSTRY_OTHER = "Other"
-INDUSTRY_OPTIONS = (
-    INDUSTRY_PLACEHOLDER,
-    "Automotive",
-    "Construction",
-    "Dental",
-    "Education",
-    "Financial Services",
-    "Healthcare",
-    "Hospitality",
-    "HVAC",
-    "Insurance",
-    "Legal",
-    "Manufacturing",
-    "Medical",
-    "Nonprofit",
-    "Plumbing",
-    "Professional Services",
-    "Property Management",
-    "Real Estate",
-    "Restaurant",
-    "Retail",
-    "Technology",
-    "Transportation",
-    INDUSTRY_OTHER,
-)
 DOMAIN_PATTERN = re.compile(
     r"^(?=.{1,253}$)(?!-)([A-Za-z0-9-]{1,63}\.)+[A-Za-z]{2,63}(/.*)?$"
 )
 EMAIL_PATTERN = re.compile(r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$")
-CONTACT_TITLE_PLACEHOLDER = "Select title"
-CONTACT_TITLE_OTHER = "Other"
-CONTACT_TITLE_OPTIONS = (
-    CONTACT_TITLE_PLACEHOLDER,
-    "Owner",
-    "Co-Owner",
-    "CEO",
-    "President",
-    "Vice President",
-    "General Manager",
-    "Office Manager",
-    "Practice Manager",
-    "Operations Manager",
-    "IT Manager",
-    "Administrator",
-    "Receptionist",
-    "Purchasing Manager",
-    "Facilities Manager",
-    CONTACT_TITLE_OTHER,
-)
-US_STATES = {
-    "AL": "Alabama",
-    "AK": "Alaska",
-    "AZ": "Arizona",
-    "AR": "Arkansas",
-    "CA": "California",
-    "CO": "Colorado",
-    "CT": "Connecticut",
-    "DE": "Delaware",
-    "FL": "Florida",
-    "GA": "Georgia",
-    "HI": "Hawaii",
-    "ID": "Idaho",
-    "IL": "Illinois",
-    "IN": "Indiana",
-    "IA": "Iowa",
-    "KS": "Kansas",
-    "KY": "Kentucky",
-    "LA": "Louisiana",
-    "ME": "Maine",
-    "MD": "Maryland",
-    "MA": "Massachusetts",
-    "MI": "Michigan",
-    "MN": "Minnesota",
-    "MS": "Mississippi",
-    "MO": "Missouri",
-    "MT": "Montana",
-    "NE": "Nebraska",
-    "NV": "Nevada",
-    "NH": "New Hampshire",
-    "NJ": "New Jersey",
-    "NM": "New Mexico",
-    "NY": "New York",
-    "NC": "North Carolina",
-    "ND": "North Dakota",
-    "OH": "Ohio",
-    "OK": "Oklahoma",
-    "OR": "Oregon",
-    "PA": "Pennsylvania",
-    "RI": "Rhode Island",
-    "SC": "South Carolina",
-    "SD": "South Dakota",
-    "TN": "Tennessee",
-    "TX": "Texas",
-    "UT": "Utah",
-    "VT": "Vermont",
-    "VA": "Virginia",
-    "WA": "Washington",
-    "WV": "West Virginia",
-    "WI": "Wisconsin",
-    "WY": "Wyoming",
-    "DC": "District of Columbia",
-}
 STATE_OPTIONS = tuple(US_STATES.keys())
-LOCATION_TYPE_OPTIONS = (LocationType.SMB, LocationType.SOHO)
 
 
 def clean_optional_text(value: Optional[str]) -> Optional[str]:
@@ -149,8 +52,8 @@ def validate_us_phone(value: Optional[str], field_name: str = "Phone") -> Option
         return None
     if not cleaned.isdigit():
         raise ValueError(f"{field_name} must contain digits only.")
-    if len(cleaned) != 10:
-        raise ValueError(f"{field_name} must contain exactly 10 digits.")
+    if len(cleaned) != PHONE_DIGIT_LENGTH:
+        raise ValueError(f"{field_name} must contain exactly {PHONE_DIGIT_LENGTH} digits.")
     return cleaned
 
 
@@ -170,7 +73,7 @@ def format_phone_display(value: Optional[str]) -> str:
     cleaned = clean_optional_text(value)
     if cleaned is None:
         return ""
-    if len(cleaned) == 10 and cleaned.isdigit():
+    if len(cleaned) == PHONE_DIGIT_LENGTH and cleaned.isdigit():
         return f"({cleaned[:3]}) {cleaned[3:6]}-{cleaned[6:]}"
     return cleaned
 
@@ -250,22 +153,40 @@ def normalize_name(value: Optional[str], field_name: str = "Name") -> Optional[s
     return " ".join(words)
 
 
+def normalize_person_name(value: Optional[str], field_name: str = "Name") -> Optional[str]:
+    return normalize_name(value, field_name=field_name)
+
+
+def validate_person_name(value: Optional[str], field_name: str = "Name") -> Optional[str]:
+    return normalize_person_name(value, field_name=field_name)
+
+
 def contact_display_name(first_name: Optional[str], last_name: Optional[str]) -> str:
     full_name = " ".join(value for value in (clean_optional_text(first_name), clean_optional_text(last_name)) if value)
     return full_name or "Contact"
 
 
-def normalize_email(value: Optional[str]) -> Optional[str]:
+def _email_error_message(field_name: str) -> str:
+    if field_name == "Email":
+        return "Enter a valid email address, such as name@company.com."
+    return f"Enter a valid {field_name.lower()} address, such as name@company.com."
+
+
+def normalize_email(value: Optional[str], field_name: str = "Email") -> Optional[str]:
     cleaned = clean_optional_text(value)
     if cleaned is None:
         return None
     normalized = cleaned.lower()
     if any(character.isspace() for character in normalized) or normalized.count("@") != 1:
-        raise ValueError("Enter a valid email address, such as name@company.com.")
+        raise ValueError(_email_error_message(field_name))
     local_part, domain = normalized.split("@")
     if not local_part or not domain or not EMAIL_PATTERN.match(normalized):
-        raise ValueError("Enter a valid email address, such as name@company.com.")
+        raise ValueError(_email_error_message(field_name))
     return normalized
+
+
+def validate_email(value: Optional[str], field_name: str = "Email") -> Optional[str]:
+    return normalize_email(value, field_name=field_name)
 
 
 def validate_decision_role(value: ContactRole | str | None) -> ContactRole:
@@ -312,11 +233,19 @@ def normalize_zip_code(value: Optional[str]) -> str:
     return cleaned
 
 
+def validate_zip(value: Optional[str]) -> str:
+    return normalize_zip_code(value)
+
+
 def validate_us_state(value: Optional[str]) -> str:
     cleaned = require_text(value, "State").upper()
     if cleaned not in US_STATES:
         raise ValueError("Please select a state.")
     return cleaned
+
+
+def validate_state(value: Optional[str]) -> str:
+    return validate_us_state(value)
 
 
 def normalize_city(value: Optional[str]) -> str:

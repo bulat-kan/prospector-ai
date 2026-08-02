@@ -43,6 +43,35 @@ pytest -v
 streamlit run app/ui.py
 ```
 
+## UI Architecture
+
+[app/ui.py](app/ui.py) is the Streamlit entry point. It handles page
+configuration, sidebar navigation, and routing only.
+
+Page-level coordination lives in `app/views/`:
+
+- `dashboard_page.py`
+- `companies_page.py`
+
+Focused reusable UI sections live in `app/components/`, including company,
+location, contact, referral, and flash-message components. New views should be
+added under `app/views/`, and new forms/components should be added under
+`app/components/`.
+
+New forms must reuse shared validators and normalizers from `app.validation` and
+controlled option lists from `app.constants`. Keep database writes in CRUD or
+service modules rather than UI components.
+
+## Commission Foundation
+
+Commission-cycle helpers live in `app.commission_cycle`. Cycles run from the
+29th through the 28th of the following month, such as `Jul 29 – Aug 28, 2026`.
+
+Shared product catalog constants, commission statuses, and fulfillment statuses
+live in `app.constants`. The shared location type list now supports SMB, SOHO,
+and B&R. Business-rule notes are documented in
+[docs/commission_foundation.md](docs/commission_foundation.md).
+
 The app currently includes:
 
 - Dashboard: monthly sales performance, commission progress, next-tier forecast,
@@ -105,6 +134,12 @@ Validation responsibility:
   safe additive schema compatibility. Complex email/name/location cleanup rules
   remain in CRUD/audit rather than SQLite constraints to avoid unsafe table
   rebuilds against legacy local data.
+
+Shared standards live in [docs/data_standards.md](docs/data_standards.md).
+Before adding any new input field, search for an existing validator, normalizer,
+display helper, and controlled option list. Do not duplicate validation logic.
+Every new UI page, script, import, future API, and CRUD path should flow through:
+UI -> CRUD -> `app.validation` helpers -> `app.constants` values.
 
 ## Development Reset
 

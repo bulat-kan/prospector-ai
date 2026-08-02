@@ -1,3 +1,4 @@
+from app.constants import REFERRAL_PHONE_MAX_CHARS
 from app.form_state import (
     contact_form_key,
     initialize_add_company_form_state,
@@ -13,6 +14,9 @@ from app.form_state import (
 from app.validation import LEAD_SOURCE_AE_FOUND, LEAD_SOURCE_REFERRAL
 
 
+REFERRAL_EMAIL_ERROR = "Enter a valid referral partner email address, such as name@company.com."
+
+
 def valid_state() -> dict[str, object]:
     state: dict[str, object] = {}
     initialize_add_company_form_state(state)
@@ -24,6 +28,24 @@ def valid_state() -> dict[str, object]:
             "add_company_industry": "Plumbing",
             "add_company_lead_source": LEAD_SOURCE_AE_FOUND,
             "add_company_notes": "Keep this note",
+        }
+    )
+    return state
+
+
+def referral_state() -> dict[str, object]:
+    state = valid_state()
+    state.update(
+        {
+            "add_company_lead_source": LEAD_SOURCE_REFERRAL,
+            "add_company_referral_mode": "Add new referral partner",
+            "add_company_partner_first": "Nancy",
+            "add_company_partner_last": "Carter",
+            "add_company_partner_org": "Local Chamber",
+            "add_company_partner_role": "President",
+            "add_company_partner_reference": "SP-1",
+            "add_company_partner_notes": "Partner note",
+            "add_company_notes": "Company note",
         }
     )
     return state
@@ -85,7 +107,7 @@ def test_new_referral_partner_payload_requires_identity() -> None:
     _, partner_payload, errors = validate_add_company_form_state(state)
 
     assert partner_payload is not None
-    assert errors["referral"] == "Referral partner information is incomplete."
+    assert errors["referral"] == "At least one referral partner name, organization, email, or phone value is required."
 
 
 def test_new_referral_partner_payload_accepts_identity() -> None:
@@ -100,6 +122,157 @@ def test_new_referral_partner_payload_accepts_identity() -> None:
     assert company_payload["lead_source"] == LEAD_SOURCE_REFERRAL
     assert partner_payload is not None
     assert partner_payload["organization"] == "Local Chamber"
+
+
+def test_new_referral_partner_invalid_phone_preserves_form_values() -> None:
+    state = referral_state()
+    state["add_company_partner_phone"] = "232-123-1234"
+    state["add_company_notes"] = "Do not clear me"
+
+    _, partner_payload, errors = validate_add_company_form_state(state)
+
+    assert partner_payload is not None
+    assert errors["referral_phone"] == "Referral partner phone must contain digits only."
+    assert state["add_company_partner_org"] == "Local Chamber"
+    assert state["add_company_notes"] == "Do not clear me"
+
+
+def test_new_referral_partner_email_is_normalized_in_payload() -> None:
+    state = referral_state()
+    state["add_company_partner_email"] = " PARTNER@EXAMPLE.COM "
+
+    _, partner_payload, errors = validate_add_company_form_state(state)
+
+    assert errors == {}
+    assert partner_payload is not None
+    assert partner_payload["email"] == "partner@example.com"
+
+
+def test_referral_phone_widget_configuration_limits_input_to_ten_characters() -> None:
+    assert REFERRAL_PHONE_MAX_CHARS == 10
+
+
+def test_new_referral_partner_long_phone_sets_field_error() -> None:
+    state = referral_state()
+    state["add_company_partner_phone"] = "3434343434334343434343"
+
+    _, _, errors = validate_add_company_form_state(state)
+
+    assert errors["referral_phone"] == "Referral partner phone must contain exactly 10 digits."
+
+
+def test_new_referral_partner_phone_with_letters_sets_field_error() -> None:
+    state = referral_state()
+    state["add_company_partner_phone"] = "343abc3434"
+
+    _, _, errors = validate_add_company_form_state(state)
+
+    assert errors["referral_phone"] == "Referral partner phone must contain digits only."
+
+
+def test_new_referral_partner_phone_with_symbols_sets_field_error() -> None:
+    state = referral_state()
+    state["add_company_partner_phone"] = "343-434-3434"
+
+    _, _, errors = validate_add_company_form_state(state)
+
+    assert errors["referral_phone"] == "Referral partner phone must contain digits only."
+
+
+def test_new_referral_partner_email_1_dot_com_sets_field_error() -> None:
+    state = referral_state()
+    state["add_company_partner_email"] = "1.com"
+
+    _, _, errors = validate_add_company_form_state(state)
+
+    assert errors["referral_email"] == REFERRAL_EMAIL_ERROR
+
+
+def test_new_referral_partner_email_some_sets_field_error() -> None:
+    state = referral_state()
+    state["add_company_partner_email"] = "some"
+
+    _, _, errors = validate_add_company_form_state(state)
+
+    assert errors["referral_email"] == REFERRAL_EMAIL_ERROR
+
+
+def test_valid_referral_phone_clears_phone_error() -> None:
+    state = referral_state()
+    state["add_company_partner_phone"] = "3434343434"
+
+    _, partner_payload, errors = validate_add_company_form_state(state)
+
+    assert "referral_phone" not in errors
+    assert partner_payload is not None
+    assert partner_payload["phone"] == "3434343434"
+
+
+def test_valid_referral_email_clears_email_error() -> None:
+    state = referral_state()
+    state["add_company_partner_email"] = "Nancy@MarioBros.COM"
+
+    _, partner_payload, errors = validate_add_company_form_state(state)
+
+    assert "referral_email" not in errors
+    assert partner_payload is not None
+    assert partner_payload["email"] == "nancy@mariobros.com"
+
+
+def test_invalid_referral_email_preserves_company_values() -> None:
+    state = referral_state()
+    state["add_company_partner_email"] = "1.com"
+
+    validate_add_company_form_state(state)
+
+    assert state["add_company_name"] == "Form State Co"
+    assert state["add_company_lead_source"] == LEAD_SOURCE_REFERRAL
+    assert state["add_company_notes"] == "Company note"
+
+
+def test_invalid_referral_phone_preserves_partner_fields() -> None:
+    state = referral_state()
+    state["add_company_partner_phone"] = "bad"
+
+    validate_add_company_form_state(state)
+
+    assert state["add_company_referral_mode"] == "Add new referral partner"
+    assert state["add_company_partner_first"] == "Nancy"
+    assert state["add_company_partner_org"] == "Local Chamber"
+    assert state["add_company_partner_notes"] == "Partner note"
+
+
+def test_invalid_referral_email_preserves_partner_fields() -> None:
+    state = referral_state()
+    state["add_company_partner_email"] = "some"
+
+    validate_add_company_form_state(state)
+
+    assert state["add_company_referral_mode"] == "Add new referral partner"
+    assert state["add_company_partner_last"] == "Carter"
+    assert state["add_company_partner_reference"] == "SP-1"
+
+
+def test_both_invalid_referral_phone_and_email_are_reported() -> None:
+    state = referral_state()
+    state["add_company_partner_phone"] = "3434343434334343434343"
+    state["add_company_partner_email"] = "1.com"
+
+    _, _, errors = validate_add_company_form_state(state)
+
+    assert errors["referral_phone"] == "Referral partner phone must contain exactly 10 digits."
+    assert errors["referral_email"] == REFERRAL_EMAIL_ERROR
+
+
+def test_reset_clears_referral_field_error_state() -> None:
+    state = referral_state()
+    state["add_company_referral_phone_error"] = "Phone error"
+    state["add_company_referral_email_error"] = "Email error"
+
+    reset_add_company_form_state(state)
+
+    assert state["add_company_referral_phone_error"] == ""
+    assert state["add_company_referral_email_error"] == ""
 
 
 def test_setting_success_flash_message_stores_scalar_values() -> None:

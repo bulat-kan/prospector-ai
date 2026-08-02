@@ -12,6 +12,7 @@ from app.crud import (
     create_contact,
     create_location,
     create_referral_partner,
+    create_company_with_referral_partner,
     deactivate_contact,
     deactivate_location,
     deactivate_referral_partner,
@@ -26,6 +27,7 @@ from app.crud import (
     restore_location,
     restore_referral_partner,
     update_company,
+    update_referral_partner,
 )
 from app.enums import ActivityType, ContactRole, LocationType
 from app.models import Activity, Company, Contact, Location, ReferralPartner
@@ -127,6 +129,103 @@ def test_ae_found_company_does_not_require_partner(db_session) -> None:
 def test_referral_partner_requires_identity(db_session) -> None:
     with pytest.raises(ValidationError, match="At least one referral partner"):
         create_referral_partner(db_session)
+
+
+def test_referral_partner_phone_is_validated_and_normalized(db_session) -> None:
+    partner = create_referral_partner(db_session, organization="Phone Partner", phone="2321231234")
+
+    assert partner.phone == "2321231234"
+    with pytest.raises(ValidationError, match="Referral partner phone must contain digits only"):
+        create_referral_partner(db_session, organization="Bad Phone Partner", phone="232-123-1234")
+
+
+def test_referral_partner_email_is_validated_and_normalized(db_session) -> None:
+    partner = create_referral_partner(db_session, organization="Email Partner", email=" PARTNER@EXAMPLE.COM ")
+
+    assert partner.email == "partner@example.com"
+    with pytest.raises(ValidationError, match="valid referral partner email address"):
+        create_referral_partner(db_session, organization="Bad Email Partner", email="partner")
+
+
+def test_update_referral_partner_rolls_back_invalid_contact_data(db_session) -> None:
+    partner = create_referral_partner(db_session, organization="Rollback Partner", phone="2321231234")
+
+    with pytest.raises(ValidationError, match="Referral partner phone"):
+        update_referral_partner(db_session, partner.id, phone="bad", email="new@example.com")
+
+    stored = db_session.get(ReferralPartner, partner.id)
+    assert stored.phone == "2321231234"
+    assert stored.email is None
+
+
+def test_inline_company_referral_create_is_atomic_on_company_failure(db_session) -> None:
+    create_company(db_session, name="Atomic Duplicate Co")
+
+    with pytest.raises(DuplicateRecordError):
+        create_company_with_referral_partner(
+            db_session,
+            company_fields={
+                "name": "atomic duplicate co",
+                "industry": "Plumbing",
+                "lead_source": LEAD_SOURCE_REFERRAL,
+            },
+            referral_partner_fields={"organization": "Should Roll Back", "phone": "2321231234"},
+        )
+
+    assert db_session.query(ReferralPartner).filter_by(organization="Should Roll Back").count() == 0
+
+
+def test_inline_company_referral_create_is_atomic_on_partner_failure(db_session) -> None:
+    with pytest.raises(ValidationError, match="Referral partner phone"):
+        create_company_with_referral_partner(
+            db_session,
+            company_fields={
+                "name": "No Partial Company Co",
+                "industry": "Plumbing",
+                "lead_source": LEAD_SOURCE_REFERRAL,
+            },
+            referral_partner_fields={"organization": "Invalid Partner", "phone": "bad"},
+        )
+
+    assert list_companies(db_session, search="No Partial Company") == ()
+    assert db_session.query(ReferralPartner).filter_by(organization="Invalid Partner").count() == 0
+
+
+def test_inline_company_referral_create_is_atomic_on_partner_email_failure(db_session) -> None:
+    with pytest.raises(ValidationError, match="valid referral partner email address"):
+        create_company_with_referral_partner(
+            db_session,
+            company_fields={
+                "name": "No Partial Email Co",
+                "industry": "Plumbing",
+                "lead_source": LEAD_SOURCE_REFERRAL,
+            },
+            referral_partner_fields={"organization": "Invalid Email Partner", "email": "1.com"},
+        )
+
+    assert list_companies(db_session, search="No Partial Email") == ()
+    assert db_session.query(ReferralPartner).filter_by(organization="Invalid Email Partner").count() == 0
+
+
+def test_inline_company_referral_create_stores_normalized_contact_values(db_session) -> None:
+    company = create_company_with_referral_partner(
+        db_session,
+        company_fields={
+            "name": "Normalized Referral Co",
+            "industry": "Plumbing",
+            "lead_source": LEAD_SOURCE_REFERRAL,
+        },
+        referral_partner_fields={
+            "first_name": "nancy",
+            "organization": "Mario Bros",
+            "phone": "3434343434",
+            "email": "Nancy@MarioBros.COM",
+        },
+    )
+
+    partner = db_session.get(ReferralPartner, company.referral_partner_id)
+    assert partner.phone == "3434343434"
+    assert partner.email == "nancy@mariobros.com"
 
 
 def test_referral_partner_source_pair_must_be_complete(db_session) -> None:

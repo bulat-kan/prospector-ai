@@ -1,5 +1,16 @@
 import pytest
 
+from app.constants import (
+    COMMISSION_STATUSES,
+    CONTACT_TITLES,
+    DECISION_ROLES,
+    FULFILLMENT_STATUSES,
+    INDUSTRIES,
+    LEAD_SOURCES,
+    LOCATION_TYPES,
+    PRODUCT_CATALOG,
+    US_STATES,
+)
 from app.enums import LocationType
 from app.validation import (
     clean_optional_text,
@@ -11,6 +22,7 @@ from app.validation import (
     normalize_contact_phone,
     normalize_email,
     normalize_name,
+    normalize_person_name,
     normalize_city,
     normalize_phone,
     normalize_zip_code,
@@ -19,8 +31,12 @@ from app.validation import (
     title_selection_for_existing,
     validate_decision_role,
     validate_location_type,
+    validate_person_name,
     validate_us_phone,
     validate_us_state,
+    validate_email,
+    validate_state,
+    validate_zip,
     validate_company_name,
     validate_contact_identity,
     validate_industry_selection,
@@ -54,12 +70,19 @@ def test_contact_email_validation_and_normalization() -> None:
     assert normalize_email("") is None
     assert normalize_email("John.Smith@Company.COM") == "john.smith@company.com"
     assert normalize_email("john+sales@company.co") == "john+sales@company.co"
+    assert validate_email(" OWNER@EXAMPLE.COM ") == "owner@example.com"
+    assert validate_email(" OWNER@EXAMPLE.COM ", field_name="Referral partner email") == "owner@example.com"
 
 
 @pytest.mark.parametrize("value", ["some", "john@", "@gmail.com", "john.com", "john @company.com", "john@ company.com", "test@example", "multiple@@company.com"])
 def test_invalid_contact_email_is_rejected(value: str) -> None:
     with pytest.raises(ValueError, match="valid email address"):
         normalize_email(value)
+
+
+def test_referral_email_error_uses_field_specific_message() -> None:
+    with pytest.raises(ValueError, match="valid referral partner email address"):
+        validate_email("1.com", field_name="Referral partner email")
 
 
 @pytest.mark.parametrize(
@@ -73,6 +96,8 @@ def test_invalid_contact_email_is_rejected(value: str) -> None:
 )
 def test_contact_name_normalization(raw: str, expected: str) -> None:
     assert normalize_name(raw) == expected
+    assert normalize_person_name(raw) == expected
+    assert validate_person_name(raw) == expected
 
 
 def test_contact_title_rules() -> None:
@@ -118,6 +143,7 @@ def test_custom_location_label_is_preserved() -> None:
 
 def test_valid_zip_is_accepted() -> None:
     assert normalize_zip_code("34655") == "34655"
+    assert validate_zip("34655") == "34655"
 
 
 @pytest.mark.parametrize("value", ["3465", "346551", "34A55", "34-655", "ABCDE"])
@@ -129,6 +155,7 @@ def test_invalid_zip_values_are_rejected(value: str) -> None:
 @pytest.mark.parametrize("state", ["FL", "TX", "DC"])
 def test_valid_states_are_accepted(state: str) -> None:
     assert validate_us_state(state) == state
+    assert validate_state(state.lower()) == state
 
 
 def test_invalid_state_is_rejected() -> None:
@@ -153,9 +180,9 @@ def test_city_normalization(raw: str, expected: str) -> None:
     assert normalize_city(raw) == expected
 
 
-@pytest.mark.parametrize("value", [LocationType.SMB, LocationType.SOHO, "SMB", "SOHO"])
+@pytest.mark.parametrize("value", [LocationType.SMB, LocationType.SOHO, LocationType.BAR_RESTAURANT, "SMB", "SOHO", "B&R"])
 def test_valid_location_types_are_accepted(value) -> None:
-    assert validate_location_type(value) in {LocationType.SMB, LocationType.SOHO}
+    assert validate_location_type(value) in {LocationType.SMB, LocationType.SOHO, LocationType.BAR_RESTAURANT}
 
 
 @pytest.mark.parametrize("value", [LocationType.COMMERCIAL, "WAREHOUSE", None])
@@ -277,3 +304,39 @@ def test_invalid_website_is_rejected(value: str) -> None:
 def test_email_entered_as_website_is_rejected() -> None:
     with pytest.raises(ValueError, match="valid website"):
         normalize_website("test@site.com")
+
+
+def test_controlled_values_are_centralized() -> None:
+    assert "FL" in US_STATES
+    assert "Plumbing" in INDUSTRIES
+    assert "Owner" in CONTACT_TITLES
+    assert LocationType.SMB in LOCATION_TYPES
+    assert LocationType.SOHO in LOCATION_TYPES
+    assert LocationType.BAR_RESTAURANT in LOCATION_TYPES
+    assert {"AE_FOUND", "REFERRAL"} <= set(LEAD_SOURCES)
+    assert any(role.value == "DECISION_MAKER" for role in DECISION_ROLES)
+
+
+def test_product_catalog_and_commission_status_constants_are_centralized() -> None:
+    assert PRODUCT_CATALOG == (
+        "Internet",
+        "Mobile",
+        "Voice",
+        "TV",
+        "Seasonal Sports",
+        "EverPass",
+        "Managed WiFi",
+        "Security",
+        "Other",
+    )
+    assert COMMISSION_STATUSES == (
+        "Pending Fulfillment",
+        "Commission Eligible",
+        "Commission Paid",
+    )
+    assert FULFILLMENT_STATUSES == (
+        "Pending",
+        "Installed",
+        "Activated",
+        "Cancelled",
+    )

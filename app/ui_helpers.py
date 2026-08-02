@@ -2,7 +2,8 @@ from decimal import Decimal
 from enum import Enum
 from typing import Optional
 
-from app.validation import LEAD_SOURCE_LABELS, format_phone_display
+from app.constants import LEAD_SOURCE_LABELS
+from app.validation import format_phone_display
 
 
 MONTH_NAMES = {

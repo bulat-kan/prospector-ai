@@ -23,6 +23,7 @@ from app.validation import (
     normalize_city,
     normalize_email,
     normalize_name,
+    normalize_phone,
     normalize_street_address,
     normalize_website,
     normalize_zip_code,
@@ -309,6 +310,47 @@ def _validate_company_referral(
     return partner
 
 
+def _add_company_to_session(
+    session: Session,
+    *,
+    name: str,
+    website: Optional[str] = None,
+    main_phone: Optional[str] = None,
+    industry: Optional[str] = None,
+    lead_source: Optional[str] = None,
+    notes: Optional[str] = None,
+    source_system: Optional[str] = None,
+    external_id: Optional[str] = None,
+    last_imported_at: Optional[datetime] = None,
+    referral_partner_id: Optional[int] = None,
+    referred_at: Optional[datetime] = None,
+) -> Company:
+    clean_name = validate_company_name(name)
+    normalized_source, normalized_external_id = _normalize_source(source_system, external_id)
+    normalized_lead_source = validate_lead_source(lead_source)
+    partner = _validate_company_referral(session, normalized_lead_source, referral_partner_id)
+    existing_name = session.scalar(select(Company).where(func.lower(Company.name) == clean_name.lower()))
+    if existing_name is not None:
+        raise DuplicateRecordError(f"Company named {clean_name!r} already exists.")
+    _check_source_duplicate(session, Company, normalized_source, normalized_external_id)
+    company = Company(
+        name=clean_name,
+        website=normalize_website(website),
+        main_phone=normalize_company_phone(main_phone),
+        industry=clean_optional_text(industry),
+        lead_source=normalized_lead_source,
+        referral_partner_id=partner.id if partner else None,
+        referred_at=referred_at if partner else None,
+        notes=clean_optional_text(notes),
+        source_system=normalized_source,
+        external_id=normalized_external_id,
+        last_imported_at=last_imported_at,
+    )
+    session.add(company)
+    session.flush()
+    return company
+
+
 def create_company(
     session: Session,
     *,
@@ -325,35 +367,82 @@ def create_company(
     referred_at: Optional[datetime] = None,
 ) -> CompanyDTO:
     try:
-        clean_name = validate_company_name(name)
-        normalized_source, normalized_external_id = _normalize_source(source_system, external_id)
-        normalized_lead_source = validate_lead_source(lead_source)
-        partner = _validate_company_referral(session, normalized_lead_source, referral_partner_id)
-        existing_name = session.scalar(select(Company).where(func.lower(Company.name) == clean_name.lower()))
-        if existing_name is not None:
-            raise DuplicateRecordError(f"Company named {clean_name!r} already exists.")
-        _check_source_duplicate(session, Company, normalized_source, normalized_external_id)
-        company = Company(
-            name=clean_name,
-            website=normalize_website(website),
-            main_phone=normalize_company_phone(main_phone),
-            industry=clean_optional_text(industry),
-            lead_source=normalized_lead_source,
-            referral_partner_id=partner.id if partner else None,
-            referred_at=referred_at if partner else None,
-            notes=clean_optional_text(notes),
-            source_system=normalized_source,
-            external_id=normalized_external_id,
+        company = _add_company_to_session(
+            session,
+            name=name,
+            website=website,
+            main_phone=main_phone,
+            industry=industry,
+            lead_source=lead_source,
+            notes=notes,
+            source_system=source_system,
+            external_id=external_id,
             last_imported_at=last_imported_at,
+            referral_partner_id=referral_partner_id,
+            referred_at=referred_at,
         )
-        session.add(company)
         session.commit()
         session.refresh(company)
         return _company_to_dto(company)
     except ValueError as exc:
         session.rollback()
         _raise_validation(exc)
-    except DuplicateRecordError:
+    except (DuplicateRecordError, ValidationError):
+        session.rollback()
+        raise
+    except SQLAlchemyError as exc:
+        _handle_db_error(session, exc)
+    raise AssertionError("unreachable")
+
+
+def create_company_with_referral_partner(
+    session: Session,
+    *,
+    company_fields: dict[str, object],
+    referral_partner_fields: Optional[dict[str, object]] = None,
+) -> CompanyDTO:
+    try:
+        if referral_partner_fields is not None:
+            partner = _add_referral_partner_to_session(
+                session,
+                first_name=referral_partner_fields.get("first_name"),  # type: ignore[arg-type]
+                last_name=referral_partner_fields.get("last_name"),  # type: ignore[arg-type]
+                organization=referral_partner_fields.get("organization"),  # type: ignore[arg-type]
+                role_or_type=referral_partner_fields.get("role_or_type"),  # type: ignore[arg-type]
+                phone=referral_partner_fields.get("phone"),  # type: ignore[arg-type]
+                email=referral_partner_fields.get("email"),  # type: ignore[arg-type]
+                is_registered_spectrum_partner=bool(referral_partner_fields.get("is_registered_spectrum_partner", False)),
+                spectrum_partner_reference=referral_partner_fields.get("spectrum_partner_reference"),  # type: ignore[arg-type]
+                notes=referral_partner_fields.get("notes"),  # type: ignore[arg-type]
+                source_system=referral_partner_fields.get("source_system"),  # type: ignore[arg-type]
+                external_id=referral_partner_fields.get("external_id"),  # type: ignore[arg-type]
+                last_imported_at=referral_partner_fields.get("last_imported_at"),  # type: ignore[arg-type]
+            )
+            company_fields = {**company_fields, "referral_partner_id": partner.id}
+        company = _add_company_to_session(
+            session,
+            name=company_fields["name"],  # type: ignore[arg-type]
+            website=company_fields.get("website"),  # type: ignore[arg-type]
+            main_phone=company_fields.get("main_phone"),  # type: ignore[arg-type]
+            industry=company_fields.get("industry"),  # type: ignore[arg-type]
+            lead_source=company_fields.get("lead_source"),  # type: ignore[arg-type]
+            notes=company_fields.get("notes"),  # type: ignore[arg-type]
+            source_system=company_fields.get("source_system"),  # type: ignore[arg-type]
+            external_id=company_fields.get("external_id"),  # type: ignore[arg-type]
+            last_imported_at=company_fields.get("last_imported_at"),  # type: ignore[arg-type]
+            referral_partner_id=company_fields.get("referral_partner_id"),  # type: ignore[arg-type]
+            referred_at=company_fields.get("referred_at"),  # type: ignore[arg-type]
+        )
+        session.commit()
+        session.refresh(company)
+        return _company_to_dto(company)
+    except KeyError as exc:
+        session.rollback()
+        raise ValidationError("Company name is required.") from exc
+    except ValueError as exc:
+        session.rollback()
+        _raise_validation(exc)
+    except (DuplicateRecordError, RecordNotFoundError, ValidationError):
         session.rollback()
         raise
     except SQLAlchemyError as exc:
@@ -787,36 +876,82 @@ def create_referral_partner(
     last_imported_at: Optional[datetime] = None,
 ) -> ReferralPartnerDTO:
     try:
-        validate_referral_partner_identity(first_name, last_name, organization, phone, email)
-        normalized_source, normalized_external_id = _normalize_source(source_system, external_id)
-        _check_source_duplicate(session, ReferralPartner, normalized_source, normalized_external_id)
-        partner = ReferralPartner(
-            first_name=clean_optional_text(first_name),
-            last_name=clean_optional_text(last_name),
-            organization=clean_optional_text(organization),
-            role_or_type=clean_optional_text(role_or_type),
-            phone=clean_optional_text(phone),
-            email=clean_optional_text(email),
+        partner = _add_referral_partner_to_session(
+            session,
+            first_name=first_name,
+            last_name=last_name,
+            organization=organization,
+            role_or_type=role_or_type,
+            phone=phone,
+            email=email,
             is_registered_spectrum_partner=is_registered_spectrum_partner,
-            spectrum_partner_reference=clean_optional_text(spectrum_partner_reference),
-            notes=clean_optional_text(notes),
-            source_system=normalized_source,
-            external_id=normalized_external_id,
+            spectrum_partner_reference=spectrum_partner_reference,
+            notes=notes,
+            source_system=source_system,
+            external_id=external_id,
             last_imported_at=last_imported_at,
         )
-        session.add(partner)
         session.commit()
         session.refresh(partner)
         return _referral_partner_to_dto(partner)
     except ValueError as exc:
         session.rollback()
         _raise_validation(exc)
-    except DuplicateRecordError:
+    except (DuplicateRecordError, ValidationError):
         session.rollback()
         raise
     except SQLAlchemyError as exc:
         _handle_db_error(session, exc)
     raise AssertionError("unreachable")
+
+
+def _add_referral_partner_to_session(
+    session: Session,
+    *,
+    first_name: Optional[str] = None,
+    last_name: Optional[str] = None,
+    organization: Optional[str] = None,
+    role_or_type: Optional[str] = None,
+    phone: Optional[str] = None,
+    email: Optional[str] = None,
+    is_registered_spectrum_partner: bool = False,
+    spectrum_partner_reference: Optional[str] = None,
+    notes: Optional[str] = None,
+    source_system: Optional[str] = None,
+    external_id: Optional[str] = None,
+    last_imported_at: Optional[datetime] = None,
+) -> ReferralPartner:
+    normalized_first_name = normalize_name(first_name, "First name")
+    normalized_last_name = normalize_name(last_name, "Last name")
+    normalized_organization = clean_optional_text(organization)
+    normalized_phone = normalize_phone(phone, field_name="Referral partner phone")
+    normalized_email = normalize_email(email, field_name="Referral partner email")
+    validate_referral_partner_identity(
+        normalized_first_name,
+        normalized_last_name,
+        normalized_organization,
+        normalized_phone,
+        normalized_email,
+    )
+    normalized_source, normalized_external_id = _normalize_source(source_system, external_id)
+    _check_source_duplicate(session, ReferralPartner, normalized_source, normalized_external_id)
+    partner = ReferralPartner(
+        first_name=normalized_first_name,
+        last_name=normalized_last_name,
+        organization=normalized_organization,
+        role_or_type=clean_optional_text(role_or_type),
+        phone=normalized_phone,
+        email=normalized_email,
+        is_registered_spectrum_partner=is_registered_spectrum_partner,
+        spectrum_partner_reference=clean_optional_text(spectrum_partner_reference),
+        notes=clean_optional_text(notes),
+        source_system=normalized_source,
+        external_id=normalized_external_id,
+        last_imported_at=last_imported_at,
+    )
+    session.add(partner)
+    session.flush()
+    return partner
 
 
 def list_referral_partners(session: Session, include_inactive: bool = False) -> tuple[ReferralPartnerDTO, ...]:
@@ -834,11 +969,11 @@ def update_referral_partner(session: Session, referral_partner_id: int, **fields
     try:
         partner = _ensure_referral_partner(session, referral_partner_id)
         next_values = {
-            "first_name": fields.get("first_name", partner.first_name),
-            "last_name": fields.get("last_name", partner.last_name),
-            "organization": fields.get("organization", partner.organization),
-            "phone": fields.get("phone", partner.phone),
-            "email": fields.get("email", partner.email),
+            "first_name": normalize_name(fields.get("first_name", partner.first_name), "First name"),  # type: ignore[arg-type]
+            "last_name": normalize_name(fields.get("last_name", partner.last_name), "Last name"),  # type: ignore[arg-type]
+            "organization": clean_optional_text(fields.get("organization", partner.organization)),  # type: ignore[arg-type]
+            "phone": normalize_phone(fields.get("phone", partner.phone), field_name="Referral partner phone"),  # type: ignore[arg-type]
+            "email": normalize_email(fields.get("email", partner.email), field_name="Referral partner email"),  # type: ignore[arg-type]
         }
         validate_referral_partner_identity(**next_values)  # type: ignore[arg-type]
         if "source_system" in fields or "external_id" in fields:
@@ -849,7 +984,17 @@ def update_referral_partner(session: Session, referral_partner_id: int, **fields
             _check_source_duplicate(session, ReferralPartner, normalized_source, normalized_external_id, referral_partner_id)
             partner.source_system = normalized_source
             partner.external_id = normalized_external_id
-        for attr in ("first_name", "last_name", "organization", "role_or_type", "phone", "email", "spectrum_partner_reference", "notes"):
+        if "first_name" in fields:
+            partner.first_name = next_values["first_name"]
+        if "last_name" in fields:
+            partner.last_name = next_values["last_name"]
+        if "organization" in fields:
+            partner.organization = next_values["organization"]
+        if "phone" in fields:
+            partner.phone = next_values["phone"]
+        if "email" in fields:
+            partner.email = next_values["email"]
+        for attr in ("role_or_type", "spectrum_partner_reference", "notes"):
             if attr in fields:
                 setattr(partner, attr, clean_optional_text(fields[attr]))  # type: ignore[arg-type]
         if "is_registered_spectrum_partner" in fields:
@@ -862,7 +1007,7 @@ def update_referral_partner(session: Session, referral_partner_id: int, **fields
     except ValueError as exc:
         session.rollback()
         _raise_validation(exc)
-    except (DuplicateRecordError, RecordNotFoundError):
+    except (DuplicateRecordError, RecordNotFoundError, ValidationError):
         session.rollback()
         raise
     except SQLAlchemyError as exc:

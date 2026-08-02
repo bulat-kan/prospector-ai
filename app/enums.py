@@ -6,6 +6,7 @@ class LocationType(str, Enum):
     COMMERCIAL = "COMMERCIAL"
     RESIDENTIAL = "RESIDENTIAL"
     SOHO = "SOHO"
+    BAR_RESTAURANT = "B&R"
     WAREHOUSE = "WAREHOUSE"
     RETAIL = "RETAIL"
     OTHER = "OTHER"
