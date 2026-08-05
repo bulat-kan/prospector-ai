@@ -10,7 +10,7 @@ from app.constants import OPPORTUNITY_STAGE_LABELS
 from app.crud import CrudError, list_companies
 from app.database import SessionLocal
 from app.models import Product
-from app.opportunity_form_state import set_selected_opportunity_id
+from app.opportunity_form_state import OPPORTUNITY_PAGE_DETAIL, set_opportunity_page_mode, set_selected_opportunity_id
 from app.opportunity_service import list_opportunities, opportunity_to_summary
 from app.opportunity_ui_helpers import (
     FOLLOW_UP_ALL,
@@ -148,4 +148,5 @@ def render_browse_opportunities() -> None:
     )
     if st.button("Open opportunity", type="primary"):
         set_selected_opportunity_id(st.session_state, selected_id)
-        st.success("Opportunity detail is available in the Opportunity detail tab.")
+        set_opportunity_page_mode(st.session_state, OPPORTUNITY_PAGE_DETAIL)
+        st.rerun()

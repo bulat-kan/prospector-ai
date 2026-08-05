@@ -215,7 +215,7 @@ def render_edit_form(detail: OpportunityDetail) -> None:
                         score_reason=st.session_state.get("edit_opportunity_score_reason"),
                     )
                 st.session_state.edit_opportunity_loaded_id = None
-                set_flash_message(st.session_state, "✅ Opportunity updated successfully.")
+                set_flash_message(st.session_state, f'✅ Opportunity "{st.session_state.edit_opportunity_name}" updated successfully.')
                 st.rerun()
             except (OpportunityError, OpportunityValidationError, CrudError) as exc:
                 st.error(str(exc))

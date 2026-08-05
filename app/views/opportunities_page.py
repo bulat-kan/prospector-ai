@@ -4,16 +4,30 @@ from app.components.flash_messages import render_flash_message
 from app.components.opportunity_browse import render_browse_opportunities
 from app.components.opportunity_detail import render_opportunity_detail
 from app.components.opportunity_form import render_add_opportunity_form
+from app.opportunity_form_state import (
+    OPPORTUNITY_PAGE_ADD,
+    OPPORTUNITY_PAGE_BROWSE,
+    OPPORTUNITY_PAGE_DETAIL,
+    OPPORTUNITY_PAGE_MODES,
+    apply_pending_opportunity_form_reset,
+    initialize_opportunity_form_state,
+)
 
 
 def render_opportunities_page() -> None:
     """Render opportunity browsing, creation, detail, and product management."""
+    initialize_opportunity_form_state(st.session_state)
+    apply_pending_opportunity_form_reset(st.session_state)
     st.header("Opportunities")
     render_flash_message()
-    browse_tab, add_tab, detail_tab = st.tabs(["Browse opportunities", "Add opportunity", "Opportunity detail"])
-    with browse_tab:
+    mode = st.segmented_control(
+        "Opportunity section",
+        OPPORTUNITY_PAGE_MODES,
+        key="opportunity_page_mode",
+    )
+    if mode == OPPORTUNITY_PAGE_BROWSE:
         render_browse_opportunities()
-    with add_tab:
+    elif mode == OPPORTUNITY_PAGE_ADD:
         render_add_opportunity_form()
-    with detail_tab:
+    elif mode == OPPORTUNITY_PAGE_DETAIL:
         render_opportunity_detail()

@@ -6,19 +6,18 @@ from sqlalchemy import select
 from app.constants import OPPORTUNITY_STAGE_CLOSED_LOST, OPPORTUNITY_STAGE_CLOSED_WON
 from app.crud import CrudError, list_companies, list_company_contacts, list_company_locations
 from app.database import SessionLocal
-from app.form_state import set_flash_message
 from app.models import Product
 from app.opportunity_form_state import (
     add_product_row,
+    complete_opportunity_creation_success,
     initialize_opportunity_form_state,
     remove_product_row,
-    reset_opportunity_form_state_after_success,
 )
 from app.opportunity_service import (
     OpportunityError,
     OpportunityProductInput,
     OpportunityValidationError,
-    create_opportunity_with_products,
+    create_opportunity_result_with_products,
     normalize_opportunity_stage,
 )
 from app.opportunity_ui_helpers import (
@@ -29,6 +28,7 @@ from app.opportunity_ui_helpers import (
     parse_money_input,
     stage_label,
     stage_options,
+    opportunity_created_message,
     validate_product_rows,
     validate_score_value,
 )
@@ -267,7 +267,7 @@ def render_add_opportunity_form() -> None:
         ]
         try:
             with SessionLocal() as session:
-                opportunity = create_opportunity_with_products(
+                created = create_opportunity_result_with_products(
                     session,
                     company_id=int(company_id),
                     location_id=st.session_state.get("opportunity_location_id"),
@@ -287,9 +287,11 @@ def render_add_opportunity_form() -> None:
                     score_reason=st.session_state.get("opportunity_score_reason"),
                     products=product_inputs,
                 )
-            reset_opportunity_form_state_after_success(st.session_state, opportunity.id)
-            st.session_state.opportunity_errors = {}
-            set_flash_message(st.session_state, f'✅ Opportunity "{opportunity.name}" added successfully.')
+            complete_opportunity_creation_success(
+                st.session_state,
+                opportunity_id=created.opportunity_id,
+                flash_message=opportunity_created_message(created.opportunity_name, created.company_name),
+            )
             st.rerun()
         except (OpportunityError, OpportunityValidationError, CrudError) as exc:
             st.session_state.opportunity_errors = {"submit": str(exc)}

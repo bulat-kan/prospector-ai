@@ -37,7 +37,7 @@ CLOSED_WON_COMMISSION_WARNING = (
     "Agreement secured. Commission is not earned until qualifying services are installed "
     "or mobile lines are activated."
 )
-ADD_OPPORTUNITY_SUCCESS_TEMPLATE = 'Opportunity "{name}" added successfully.'
+ADD_OPPORTUNITY_SUCCESS_TEMPLATE = '✅ Opportunity "{name}" created successfully for {company_name}.'
 
 
 @dataclass(frozen=True)
@@ -229,3 +229,9 @@ def open_stage_values() -> tuple[str, ...]:
 
 def closed_stage_values() -> tuple[str, ...]:
     return CLOSED_OPPORTUNITY_STAGES
+
+
+def opportunity_created_message(name: object, company_name: object) -> str:
+    opportunity_name = str(name).strip() if name else "Opportunity"
+    company = str(company_name).strip() if company_name else "the selected company"
+    return ADD_OPPORTUNITY_SUCCESS_TEMPLATE.format(name=opportunity_name, company_name=company)

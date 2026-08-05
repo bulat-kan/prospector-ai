@@ -60,6 +60,14 @@ class OpportunityProductDTO:
 
 
 @dataclass(frozen=True)
+class CreatedOpportunityResult:
+    opportunity_id: int
+    opportunity_name: str
+    company_id: int
+    company_name: str
+
+
+@dataclass(frozen=True)
 class OpportunitySummary:
     id: int
     company_id: int
@@ -217,15 +225,16 @@ def _ensure_contact(
 
 
 def _ensure_opportunity(session: Session, opportunity_id: int) -> Opportunity:
-    opportunity = session.get(
-        Opportunity,
-        opportunity_id,
-        options=(
+    opportunity = session.scalar(
+        select(Opportunity)
+        .options(
             selectinload(Opportunity.company),
             selectinload(Opportunity.location),
             selectinload(Opportunity.primary_contact),
             selectinload(Opportunity.products).selectinload(OpportunityProduct.product),
-        ),
+        )
+        .where(Opportunity.id == opportunity_id)
+        .execution_options(populate_existing=True)
     )
     if opportunity is None:
         raise RecordNotFoundError(f"Opportunity id={opportunity_id} was not found.")
@@ -421,6 +430,25 @@ def create_opportunity_with_products(
     except Exception:
         session.rollback()
         raise
+
+
+def opportunity_to_created_result(opportunity: Opportunity) -> CreatedOpportunityResult:
+    return CreatedOpportunityResult(
+        opportunity_id=opportunity.id,
+        opportunity_name=opportunity.name,
+        company_id=opportunity.company_id,
+        company_name=opportunity.company.name,
+    )
+
+
+def create_opportunity_result_with_products(
+    session: Session,
+    *,
+    products: list[OpportunityProductInput],
+    **opportunity_kwargs,
+) -> CreatedOpportunityResult:
+    opportunity = create_opportunity_with_products(session, products=products, **opportunity_kwargs)
+    return opportunity_to_created_result(opportunity)
 
 
 def get_opportunity(session: Session, opportunity_id: int) -> Opportunity:

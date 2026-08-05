@@ -20,6 +20,7 @@ from app.opportunity_ui_helpers import (
     location_label,
     normalize_related_selection,
     opportunity_display_record,
+    opportunity_created_message,
     parse_money_input,
     stage_label,
     status_label,
@@ -218,3 +219,14 @@ def test_money_parsing() -> None:
 
 def test_closed_won_warning_text_exists() -> None:
     assert "Commission is not earned" in CLOSED_WON_COMMISSION_WARNING
+
+
+def test_opportunity_created_message_includes_opportunity_and_company_name() -> None:
+    assert (
+        opportunity_created_message("Mobile & Internet Upgrade", "Sunshine Plumbing LLC")
+        == '✅ Opportunity "Mobile & Internet Upgrade" created successfully for Sunshine Plumbing LLC.'
+    )
+
+
+def test_opportunity_created_message_has_sensible_fallbacks() -> None:
+    assert opportunity_created_message("", None) == '✅ Opportunity "Opportunity" created successfully for the selected company.'

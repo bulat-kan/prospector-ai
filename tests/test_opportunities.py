@@ -3,6 +3,7 @@ from decimal import Decimal
 
 import pytest
 from sqlalchemy import func, select, text
+from sqlalchemy.orm.exc import DetachedInstanceError
 
 from app.analytics import calculate_monthly_commission
 from app.crud import RecordNotFoundError
@@ -15,6 +16,7 @@ from app.opportunity_service import (
     add_opportunity_product,
     archive_opportunity,
     create_opportunity,
+    create_opportunity_result_with_products,
     create_opportunity_with_products,
     get_opportunity,
     is_closed_stage,
@@ -275,6 +277,56 @@ def test_create_opportunity_with_one_and_multiple_products(db_session) -> None:
     assert {row.product_code for row in many.products} == {"BUSINESS_MOBILE", "BUSINESS_VIDEO"}
 
 
+def test_created_opportunity_result_is_detached_safe_after_session_close(db_session) -> None:
+    seed_products(db_session)
+    company = create_company(db_session, name="Sunshine Plumbing LLC")
+    company_id = company.id
+
+    created = create_opportunity_result_with_products(
+        db_session,
+        company_id=company_id,
+        name="Mobile & Internet Upgrade",
+        stage=OpportunityStage.QUALIFIED,
+        next_action="Call owner",
+        next_action_date=date(2026, 7, 1),
+        products=[
+            OpportunityProductInput(product_code="BUSINESS_INTERNET", estimated_quantity=1),
+            OpportunityProductInput(product_code="BUSINESS_MOBILE", estimated_quantity=8),
+        ],
+    )
+
+    db_session.expunge_all()
+
+    assert created.opportunity_id > 0
+    assert created.opportunity_name == "Mobile & Internet Upgrade"
+    assert created.company_id == company_id
+    assert created.company_name == "Sunshine Plumbing LLC"
+
+
+def test_created_opportunity_orm_return_loads_company_before_detach(db_session) -> None:
+    seed_products(db_session)
+    company = create_company(db_session, name="Detached Safe LLC")
+
+    opportunity = create_opportunity_with_products(
+        db_session,
+        company_id=company.id,
+        name="Account Review",
+        stage=OpportunityStage.QUALIFIED,
+        next_action="Call",
+        next_action_date=date(2026, 7, 1),
+        products=[OpportunityProductInput(product_code="BUSINESS_INTERNET", estimated_quantity=1)],
+    )
+
+    db_session.expunge_all()
+
+    try:
+        assert opportunity.id > 0
+        assert opportunity.name == "Account Review"
+        assert opportunity.company.name == "Detached Safe LLC"
+    except DetachedInstanceError as exc:
+        pytest.fail(f"Opportunity creation returned a detached object requiring lazy load: {exc}")
+
+
 def test_duplicate_product_negative_values_and_missing_catalog_rejected(db_session) -> None:
     seed_products(db_session)
     company = create_company(db_session)
@@ -477,6 +529,46 @@ def test_listing_filters_and_ordering(db_session) -> None:
     assert list_opportunities(db_session, follow_up_due_before=date(2026, 7, 6), today=date(2026, 7, 10)) == (internet_deal, mobile_deal)
     assert list_opportunities(db_session, minimum_priority_score=100)[0].id == future.id
     assert list_opportunities(db_session, product_code="BUSINESS_MOBILE")[0].id == mobile_deal.id
+
+
+def test_same_company_can_have_multiple_opportunities_and_duplicate_names(db_session) -> None:
+    seed_products(db_session)
+    company = create_company(db_session, name="Multiple Opportunity Company")
+
+    first = create_opportunity_with_products(
+        db_session,
+        company_id=company.id,
+        name="Mobile & Internet Upgrade",
+        stage=OpportunityStage.QUALIFIED,
+        next_action="Review mobile pricing",
+        next_action_date=date(2026, 7, 10),
+        products=[OpportunityProductInput(product_code="BUSINESS_MOBILE", estimated_quantity=8)],
+    )
+    second = create_opportunity_with_products(
+        db_session,
+        company_id=company.id,
+        name="TV Expansion",
+        stage=OpportunityStage.QUALIFIED,
+        next_action="Review TV package",
+        next_action_date=date(2026, 7, 11),
+        products=[OpportunityProductInput(product_code="BUSINESS_VIDEO", estimated_quantity=2)],
+    )
+    duplicate_name = create_opportunity_with_products(
+        db_session,
+        company_id=company.id,
+        name="Mobile & Internet Upgrade",
+        stage=OpportunityStage.QUALIFIED,
+        next_action="Follow up later",
+        next_action_date=date(2026, 7, 12),
+        products=[OpportunityProductInput(product_code="BUSINESS_INTERNET", estimated_quantity=1)],
+    )
+
+    loaded = get_opportunity(db_session, duplicate_name.id)
+    opportunities = list_opportunities(db_session, company_id=company.id)
+
+    assert loaded.id == duplicate_name.id
+    assert {opportunity.id for opportunity in opportunities} == {first.id, second.id, duplicate_name.id}
+    assert [opportunity.name for opportunity in opportunities].count("Mobile & Internet Upgrade") == 2
 
 
 def test_dtos_have_friendly_values_and_internal_ids(db_session) -> None:
