@@ -87,3 +87,18 @@ helpers.
 - Source metadata requires `source_system` and `external_id` together.
 - CRUD operations roll back on validation failure and must not partially save
   referral partners or companies.
+
+## Opportunities
+
+- Opportunity stages come from `OPPORTUNITY_STAGES`.
+- Legacy stages are normalized by the opportunity service and `init_db`:
+  `CONTACT_ATTEMPTED`, `APPOINTMENT`, `QUOTE`, `WON`, `LOST`, and `RESEARCHING`
+  map to the current standard stages.
+- Open opportunities require a next action and next action date.
+- Closed Lost requires a lost reason.
+- Closed Won is not commissionable; future Sales/SaleItems determine commission
+  eligibility.
+- New opportunities require an active company. Provided locations and primary
+  contacts must belong to the company and be active.
+- Product detail belongs in `OpportunityProduct` rows backed by the Product
+  catalog. Legacy opportunity estimate fields remain compatibility summaries.

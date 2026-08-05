@@ -72,6 +72,23 @@ live in `app.constants`. The shared location type list now supports SMB, SOHO,
 and B&R. Business-rule notes are documented in
 [docs/commission_foundation.md](docs/commission_foundation.md).
 
+## Opportunity Backend Foundation
+
+Opportunity backend models, validation, CRUD/service functions, DTOs, and audit
+checks are available for future UI work. There is no Opportunities UI yet.
+
+Opportunity product detail is stored in `opportunity_products` rows linked to
+the Product catalog. Legacy opportunity estimate fields remain compatibility
+summaries. Closed Won is pipeline state only; commission is still driven by
+future Sales/SaleItems after installation or activation. Details are documented
+in [docs/opportunities.md](docs/opportunities.md).
+
+Run focused opportunity tests with:
+
+```bash
+pytest -v tests/test_opportunities.py
+```
+
 The app currently includes:
 
 - Dashboard: monthly sales performance, commission progress, next-tier forecast,
@@ -79,6 +96,9 @@ The app currently includes:
 - Companies: browse active companies by default, optionally show archived
   companies, open a company detail view, edit company information, manage
   locations, and manage contacts.
+- Opportunities: browse and filter opportunities, add opportunities with product
+  estimates, open detail records, edit pipeline fields, manage opportunity
+  products, and archive or restore opportunities.
 
 Company management supports commercial and residential/SOHO locations, contact
 assignment to locations, and decision-maker contacts. Companies can be archived
@@ -108,8 +128,18 @@ creating or selecting partners from company create/edit forms and stores partner
 identity, organization, Spectrum partner reference, source metadata, and active
 status.
 
-No referral compensation, payment, cash, lunch expense, referral analytics,
-Opportunities UI, or Sales UI is included in this sprint.
+Opportunity workflow rules:
+
+- Open stages require a next action and follow-up date.
+- Closed Won does not count toward commission until qualifying services are
+  installed or mobile lines are activated.
+- Opportunity product rows store estimated quantity and estimated incremental
+  MRR. Actual commission remains driven by Sales/SaleItems.
+- Archived opportunities are hidden by default, visible with Show archived, and
+  can be restored.
+
+No referral compensation, payment, cash, lunch expense, referral analytics, or
+Sales UI is included in this sprint.
 
 ## Data Quality Audit
 
@@ -119,10 +149,10 @@ Run an audit without modifying data:
 python -m app.audit_data
 ```
 
-The audit reports company, location, and contact issues by record type and ID.
-It makes no changes by default and returns a nonzero status when issues are
-found. `--fix` is intentionally deferred for now; cleanup should be performed
-explicitly after reviewing the audit output.
+The audit reports company, location, contact, referral partner, and opportunity
+issues by record type and ID. It makes no changes by default and returns a
+nonzero status when issues are found. `--fix` is intentionally deferred for now;
+cleanup should be performed explicitly after reviewing the audit output.
 
 Validation responsibility:
 

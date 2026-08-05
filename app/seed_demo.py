@@ -30,6 +30,7 @@ from app.models import (
     Contact,
     Location,
     Opportunity,
+    OpportunityProduct,
     Product,
     Sale,
     SaleItem,
@@ -114,6 +115,40 @@ PRODUCTS = [
         "creates_mrr": False,
         "uses_flat_rate": True,
         "flat_commission_amount": Decimal("50.00"),
+    },
+    {
+        "code": "SEASONAL_SPORTS",
+        "name": "Seasonal Sports",
+        "category": ProductCategory.SERVICE,
+        "description": "Seasonal sports programming package for qualified business locations.",
+        "creates_mrr": True,
+    },
+    {
+        "code": "EVERPASS",
+        "name": "EverPass",
+        "category": ProductCategory.SERVICE,
+        "description": "EverPass sports and entertainment access package.",
+        "creates_mrr": True,
+    },
+    {
+        "code": "MANAGED_WIFI",
+        "name": "Managed WiFi",
+        "category": ProductCategory.SERVICE,
+        "description": "Managed WiFi service for business customers.",
+        "creates_mrr": True,
+    },
+    {
+        "code": "SECURITY",
+        "name": "Security",
+        "category": ProductCategory.SERVICE,
+        "description": "Business security service.",
+        "creates_mrr": True,
+    },
+    {
+        "code": "OTHER",
+        "name": "Other",
+        "category": ProductCategory.OTHER,
+        "description": "Placeholder for uncategorized opportunity products.",
     },
 ]
 
@@ -311,7 +346,8 @@ def seed_demo(session: Session) -> bool:
         estimated_video_units=2,
         estimated_mrr=Decimal("649.97"),
         next_action="Call owner to review mobile pricing",
-        next_action_date=date.today() + timedelta(days=1),
+        next_action_date=date(2026, 7, 15),
+        expected_close_date=date(2026, 7, 25),
         score_reason="Existing customer with clear mobile, video, and voice gaps.",
     )
 
@@ -434,15 +470,75 @@ def seed_demo(session: Session) -> bool:
     return True
 
 
+def seed_demo_opportunity_products(session: Session) -> int:
+    company = session.scalar(select(Company).where(Company.name == COMPANY_NAME))
+    if company is None:
+        return 0
+
+    opportunity = session.scalar(
+        select(Opportunity)
+        .where(Opportunity.company_id == company.id, Opportunity.name == "Sunshine Plumbing Account Review")
+    )
+    if opportunity is None:
+        return 0
+
+    commercial_location = next((location for location in company.locations if location.location_name == "Spring Hill office"), None)
+    primary_contact = next((contact for contact in company.contacts if contact.email == "john.carter@example.com"), None)
+    opportunity.stage = OpportunityStage.QUALIFIED
+    if commercial_location is not None:
+        opportunity.location = commercial_location
+    if primary_contact is not None:
+        opportunity.primary_contact = primary_contact
+    opportunity.next_action = "Review mobile and video options"
+    opportunity.next_action_date = date(2026, 7, 15)
+    opportunity.expected_close_date = date(2026, 7, 25)
+    opportunity.estimated_mrr = Decimal("649.97")
+    opportunity.notes = opportunity.notes or "Development demo opportunity for opportunity backend testing."
+
+    products = {product.code: product for product in session.scalars(select(Product)).all()}
+    rows = {
+        "BUSINESS_MOBILE": (8, "399.92", "High", "Field team mobile lines."),
+        "BUSINESS_VIDEO": (2, "150.00", "Medium", "TV package for office and waiting area."),
+        "BUSINESS_VOICE": (1, "100.05", "Medium", "Additional office voice line."),
+    }
+    existing_codes = {row.product_code for row in opportunity.products}
+    created = 0
+    for code, (quantity, mrr, interest, notes) in rows.items():
+        if code in existing_codes:
+            continue
+        product = products.get(code)
+        if product is None:
+            raise RuntimeError(f"Missing seeded product for opportunity seed: {code}.")
+        session.add(
+            OpportunityProduct(
+                opportunity=opportunity,
+                product=product,
+                product_code=product.code,
+                estimated_quantity=quantity,
+                estimated_incremental_mrr=Decimal(mrr),
+                interest_level=interest,
+                notes=notes,
+            )
+        )
+        created += 1
+    session.commit()
+    return created
+
+
 def product_type_for_code(product_code: str) -> ProductType:
     product_types = {
         "BUSINESS_INTERNET": ProductType.INTERNET,
         "BUSINESS_MOBILE": ProductType.MOBILE,
         "BUSINESS_VOICE": ProductType.VOICE,
         "BUSINESS_VIDEO": ProductType.VIDEO,
+        "SEASONAL_SPORTS": ProductType.VIDEO,
+        "EVERPASS": ProductType.VIDEO,
+        "MANAGED_WIFI": ProductType.WIFI,
+        "SECURITY": ProductType.OTHER,
         "WIB": ProductType.BACKUP_INTERNET,
         "INVINCIBLE_WIFI": ProductType.WIFI,
         "UNLIMITED_PLUS": ProductType.MOBILE,
+        "OTHER": ProductType.OTHER,
     }
     return product_types[product_code]
 
@@ -610,6 +706,8 @@ def seed_demo_data() -> None:
         print(f"Commission plan created: {plan_created}")
         print(f"Commission tiers created: {tiers_created}")
         seed_demo(session)
+        opportunity_products_created = seed_demo_opportunity_products(session)
+        print(f"Opportunity products created: {opportunity_products_created}")
         seed_demo_sales(session)
         print_demo_summary(session)
         print_configuration_summary(session)

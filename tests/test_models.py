@@ -414,16 +414,21 @@ def test_product_catalog_seeded_correctly(db_session) -> None:
     products = db_session.scalars(select(Product).order_by(Product.code)).all()
     product_by_code = {product.code: product for product in products}
 
-    assert products_created == 7
+    assert products_created == 12
     assert plan_created is True
     assert tiers_created == 6
-    assert len(products) == 7
+    assert len(products) == 12
     assert set(product_by_code) == {
         "BUSINESS_INTERNET",
         "BUSINESS_MOBILE",
         "BUSINESS_VIDEO",
         "BUSINESS_VOICE",
+        "EVERPASS",
         "INVINCIBLE_WIFI",
+        "MANAGED_WIFI",
+        "OTHER",
+        "SEASONAL_SPORTS",
+        "SECURITY",
         "UNLIMITED_PLUS",
         "WIB",
     }
@@ -510,8 +515,8 @@ def test_seed_configuration_twice_creates_no_duplicates(db_session) -> None:
     plan_count = len(db_session.scalars(select(CommissionPlan)).all())
     tier_count = len(db_session.scalars(select(CommissionTier)).all())
 
-    assert first_result == (7, True, 6)
+    assert first_result == (12, True, 6)
     assert second_result == (0, False, 0)
-    assert product_count == 7
+    assert product_count == 12
     assert plan_count == 1
     assert tier_count == 6

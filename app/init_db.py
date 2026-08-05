@@ -88,6 +88,113 @@ def ensure_sqlite_schema_additions() -> None:
             if "display_icon" not in tier_columns:
                 connection.execute(text("ALTER TABLE commission_tiers ADD COLUMN display_icon VARCHAR(16)"))
 
+        if "opportunities" in table_names:
+            opportunity_column_info = inspector.get_columns("opportunities")
+            opportunity_columns = {column["name"] for column in opportunity_column_info}
+            for column_name, column_type in (
+                ("notes", "TEXT"),
+                ("is_active", "BOOLEAN DEFAULT 1 NOT NULL"),
+                ("archived_at", "DATETIME"),
+            ):
+                if column_name not in opportunity_columns:
+                    connection.execute(text(f"ALTER TABLE opportunities ADD COLUMN {column_name} {column_type}"))
+            location_column = next((column for column in opportunity_column_info if column["name"] == "location_id"), None)
+            if location_column is not None and location_column["nullable"] is False:
+                connection.execute(text("ALTER TABLE opportunities RENAME TO opportunities_legacy_location_required"))
+                connection.execute(
+                    text(
+                        """
+                        CREATE TABLE opportunities (
+                            id INTEGER NOT NULL,
+                            company_id INTEGER NOT NULL,
+                            location_id INTEGER,
+                            primary_contact_id INTEGER,
+                            name VARCHAR(255) NOT NULL,
+                            stage VARCHAR(19) NOT NULL,
+                            primary_product VARCHAR(15),
+                            internet_probability INTEGER NOT NULL,
+                            revenue_potential_score INTEGER NOT NULL,
+                            cross_sell_score INTEGER NOT NULL,
+                            priority_score INTEGER NOT NULL,
+                            estimated_internet_units INTEGER NOT NULL,
+                            estimated_mobile_lines INTEGER NOT NULL,
+                            estimated_voice_units INTEGER NOT NULL,
+                            estimated_video_units INTEGER NOT NULL,
+                            estimated_mrr NUMERIC(12, 2),
+                            expected_close_date DATE,
+                            next_action VARCHAR(255),
+                            next_action_date DATE,
+                            lost_reason TEXT,
+                            notes TEXT,
+                            score_reason TEXT,
+                            ai_summary TEXT,
+                            is_active BOOLEAN DEFAULT 1 NOT NULL,
+                            archived_at DATETIME,
+                            created_at DATETIME NOT NULL,
+                            updated_at DATETIME NOT NULL,
+                            PRIMARY KEY (id),
+                            CONSTRAINT ck_opportunities_internet_probability CHECK (internet_probability BETWEEN 0 AND 100),
+                            CONSTRAINT ck_opportunities_revenue_score CHECK (revenue_potential_score BETWEEN 0 AND 100),
+                            CONSTRAINT ck_opportunities_cross_sell_score CHECK (cross_sell_score BETWEEN 0 AND 100),
+                            CONSTRAINT ck_opportunities_priority_score CHECK (priority_score BETWEEN 0 AND 100),
+                            FOREIGN KEY(company_id) REFERENCES companies (id),
+                            FOREIGN KEY(location_id) REFERENCES locations (id),
+                            FOREIGN KEY(primary_contact_id) REFERENCES contacts (id)
+                        )
+                        """
+                    )
+                )
+                connection.execute(
+                    text(
+                        """
+                        INSERT INTO opportunities (
+                            id, company_id, location_id, primary_contact_id, name, stage, primary_product,
+                            internet_probability, revenue_potential_score, cross_sell_score, priority_score,
+                            estimated_internet_units, estimated_mobile_lines, estimated_voice_units,
+                            estimated_video_units, estimated_mrr, expected_close_date, next_action,
+                            next_action_date, lost_reason, notes, score_reason, ai_summary, is_active,
+                            archived_at, created_at, updated_at
+                        )
+                        SELECT
+                            id, company_id, location_id, primary_contact_id, name, stage, primary_product,
+                            internet_probability, revenue_potential_score, cross_sell_score, priority_score,
+                            estimated_internet_units, estimated_mobile_lines, estimated_voice_units,
+                            estimated_video_units, estimated_mrr, expected_close_date, next_action,
+                            next_action_date, lost_reason, notes, score_reason, ai_summary, is_active,
+                            archived_at, created_at, updated_at
+                        FROM opportunities_legacy_location_required
+                        """
+                    )
+                )
+                connection.execute(text("DROP TABLE opportunities_legacy_location_required"))
+                connection.execute(text("CREATE INDEX IF NOT EXISTS ix_opportunities_company_id ON opportunities (company_id)"))
+                connection.execute(text("CREATE INDEX IF NOT EXISTS ix_opportunities_location_id ON opportunities (location_id)"))
+                connection.execute(text("CREATE INDEX IF NOT EXISTS ix_opportunities_primary_contact_id ON opportunities (primary_contact_id)"))
+                connection.execute(text("CREATE INDEX IF NOT EXISTS ix_opportunities_stage ON opportunities (stage)"))
+                connection.execute(text("CREATE INDEX IF NOT EXISTS ix_opportunities_expected_close_date ON opportunities (expected_close_date)"))
+                connection.execute(text("CREATE INDEX IF NOT EXISTS ix_opportunities_next_action_date ON opportunities (next_action_date)"))
+                connection.execute(text("CREATE INDEX IF NOT EXISTS ix_opportunities_archived_at ON opportunities (archived_at)"))
+                connection.execute(text("CREATE INDEX IF NOT EXISTS ix_opportunities_is_active ON opportunities (is_active)"))
+                connection.execute(text("CREATE INDEX IF NOT EXISTS ix_opportunities_primary_product ON opportunities (primary_product)"))
+                connection.execute(text("CREATE INDEX IF NOT EXISTS ix_opportunities_company_stage ON opportunities (company_id, stage)"))
+                connection.execute(text("CREATE INDEX IF NOT EXISTS ix_opportunities_location_stage ON opportunities (location_id, stage)"))
+            connection.execute(text("UPDATE opportunities SET stage = 'APPOINTMENT_SET' WHERE stage = 'APPOINTMENT'"))
+            connection.execute(text("UPDATE opportunities SET stage = 'PROPOSAL_SENT' WHERE stage = 'QUOTE'"))
+            connection.execute(text("UPDATE opportunities SET stage = 'CLOSED_WON' WHERE stage = 'WON'"))
+            connection.execute(text("UPDATE opportunities SET stage = 'CLOSED_LOST' WHERE stage = 'LOST'"))
+            connection.execute(text("UPDATE opportunities SET stage = 'ATTEMPTING_CONTACT' WHERE stage = 'CONTACT_ATTEMPTED'"))
+            connection.execute(text("UPDATE opportunities SET stage = 'NEW' WHERE stage = 'RESEARCHING'"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_opportunities_active_next_action ON opportunities (is_active, next_action_date)"))
+
+        if "opportunity_products" in table_names:
+            connection.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_opportunity_products_opportunity_product_code "
+                    "ON opportunity_products (opportunity_id, product_code)"
+                )
+            )
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_opportunity_products_product ON opportunity_products (product_id)"))
+
         connection.execute(
             text(
                 "CREATE UNIQUE INDEX IF NOT EXISTS uq_companies_source_external_id "

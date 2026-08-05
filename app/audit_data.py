@@ -5,6 +5,7 @@ from sqlalchemy import select, text
 
 from app.database import SessionLocal
 from app.models import Location
+from app.opportunity_service import OpportunityValidationError, is_open_stage, normalize_opportunity_stage
 from app.validation import (
     normalize_city,
     normalize_company_phone,
@@ -68,7 +69,7 @@ def audit_locations(session) -> list[AuditIssue]:
             normalized_city = normalize_city(location["city"])
             if normalized_city != location["city"]:
                 issues.append(AuditIssue("Locations", f'Location ID {location["id"]}: city requires normalization "{location["city"]}"'))
-        except ValueError:
+        except OpportunityValidationError:
             issues.append(AuditIssue("Locations", f"Location ID {location['id']}: city is required"))
     return issues
 
@@ -140,6 +141,86 @@ def audit_referral_partners(session) -> list[AuditIssue]:
     return issues
 
 
+def audit_opportunities(session) -> list[AuditIssue]:
+    issues: list[AuditIssue] = []
+    rows = session.execute(
+        text(
+            "SELECT o.id, o.company_id, o.location_id, o.primary_contact_id, o.stage, "
+            "o.next_action, o.next_action_date, o.lost_reason, o.internet_probability, "
+            "o.revenue_potential_score, o.cross_sell_score, o.priority_score, o.estimated_mrr, "
+            "c.id AS company_exists, l.company_id AS location_company_id, ct.company_id AS contact_company_id "
+            "FROM opportunities o "
+            "LEFT JOIN companies c ON c.id = o.company_id "
+            "LEFT JOIN locations l ON l.id = o.location_id "
+            "LEFT JOIN contacts ct ON ct.id = o.primary_contact_id "
+            "ORDER BY o.id"
+        )
+    ).mappings()
+    for opportunity in rows:
+        if opportunity["company_exists"] is None:
+            issues.append(AuditIssue("Opportunities", f"Opportunity ID {opportunity['id']}: missing company {opportunity['company_id']}"))
+        if opportunity["location_id"] is not None:
+            if opportunity["location_company_id"] is None:
+                issues.append(AuditIssue("Opportunities", f"Opportunity ID {opportunity['id']}: missing location {opportunity['location_id']}"))
+            elif opportunity["location_company_id"] != opportunity["company_id"]:
+                issues.append(AuditIssue("Opportunities", f"Opportunity ID {opportunity['id']}: location belongs to another company"))
+        if opportunity["primary_contact_id"] is not None:
+            if opportunity["contact_company_id"] is None:
+                issues.append(AuditIssue("Opportunities", f"Opportunity ID {opportunity['id']}: missing contact {opportunity['primary_contact_id']}"))
+            elif opportunity["contact_company_id"] != opportunity["company_id"]:
+                issues.append(AuditIssue("Opportunities", f"Opportunity ID {opportunity['id']}: contact belongs to another company"))
+        try:
+            stage = normalize_opportunity_stage(opportunity["stage"])
+            if is_open_stage(stage):
+                if not (opportunity["next_action"] and opportunity["next_action"].strip()):
+                    issues.append(AuditIssue("Opportunities", f"Opportunity ID {opportunity['id']}: open opportunity missing next_action"))
+                if opportunity["next_action_date"] is None:
+                    issues.append(AuditIssue("Opportunities", f"Opportunity ID {opportunity['id']}: open opportunity missing next_action_date"))
+            if stage.value == "CLOSED_LOST" and not (opportunity["lost_reason"] and opportunity["lost_reason"].strip()):
+                issues.append(AuditIssue("Opportunities", f"Opportunity ID {opportunity['id']}: Closed Lost missing lost_reason"))
+        except ValueError:
+            issues.append(AuditIssue("Opportunities", f"Opportunity ID {opportunity['id']}: invalid stage {opportunity['stage']}"))
+        for field_name in ("internet_probability", "revenue_potential_score", "cross_sell_score", "priority_score"):
+            score = opportunity[field_name]
+            if score is not None and (score < 0 or score > 100):
+                issues.append(AuditIssue("Opportunities", f"Opportunity ID {opportunity['id']}: {field_name} outside 0-100"))
+        if opportunity["estimated_mrr"] is not None and opportunity["estimated_mrr"] < 0:
+            issues.append(AuditIssue("Opportunities", f"Opportunity ID {opportunity['id']}: negative estimated MRR"))
+
+    product_rows = session.execute(
+        text(
+            "SELECT op.id, op.opportunity_id, op.product_id, op.product_code, op.estimated_quantity, "
+            "op.estimated_incremental_mrr, p.id AS product_exists "
+            "FROM opportunity_products op "
+            "LEFT JOIN products p ON p.id = op.product_id "
+            "ORDER BY op.id"
+        )
+    ).mappings()
+    for row in product_rows:
+        if row["product_id"] is None or row["product_exists"] is None:
+            issues.append(AuditIssue("Opportunities", f"OpportunityProduct ID {row['id']}: missing product"))
+        if row["estimated_quantity"] is not None and row["estimated_quantity"] < 0:
+            issues.append(AuditIssue("Opportunities", f"OpportunityProduct ID {row['id']}: negative quantity"))
+        if row["estimated_incremental_mrr"] is not None and row["estimated_incremental_mrr"] < 0:
+            issues.append(AuditIssue("Opportunities", f"OpportunityProduct ID {row['id']}: negative product MRR"))
+
+    duplicates = session.execute(
+        text(
+            "SELECT opportunity_id, product_code, COUNT(*) AS row_count "
+            "FROM opportunity_products "
+            "GROUP BY opportunity_id, product_code HAVING COUNT(*) > 1"
+        )
+    ).mappings()
+    for duplicate in duplicates:
+        issues.append(
+            AuditIssue(
+                "Opportunities",
+                f"Opportunity ID {duplicate['opportunity_id']}: duplicate product rows for {duplicate['product_code']}",
+            )
+        )
+    return issues
+
+
 def run_audit() -> list[AuditIssue]:
     with SessionLocal() as session:
         return [
@@ -147,6 +228,7 @@ def run_audit() -> list[AuditIssue]:
             *audit_locations(session),
             *audit_companies(session),
             *audit_referral_partners(session),
+            *audit_opportunities(session),
         ]
 
 
@@ -157,7 +239,7 @@ def main() -> int:
         return 2
     issues = run_audit()
     print("Data quality audit")
-    grouped = {"Contacts": [], "Locations": [], "Companies": [], "Referral Partners": []}
+    grouped = {"Contacts": [], "Locations": [], "Companies": [], "Referral Partners": [], "Opportunities": []}
     for issue in issues:
         grouped.setdefault(issue.category, []).append(issue.message)
     for category, messages in grouped.items():

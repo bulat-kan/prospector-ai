@@ -195,6 +195,7 @@ class Product(Base):
     flat_commission_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
 
     sale_items: Mapped[list["SaleItem"]] = relationship(back_populates="product")
+    opportunity_products: Mapped[list["OpportunityProduct"]] = relationship(back_populates="product")
 
     def __repr__(self) -> str:
         return f"Product(id={self.id!r}, code={self.code!r}, name={self.name!r})"
@@ -420,11 +421,12 @@ class Opportunity(TimestampMixin, Base):
         CheckConstraint("priority_score BETWEEN 0 AND 100", name="ck_opportunities_priority_score"),
         Index("ix_opportunities_company_stage", "company_id", "stage"),
         Index("ix_opportunities_location_stage", "location_id", "stage"),
+        Index("ix_opportunities_active_next_action", "is_active", "next_action_date"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     company_id: Mapped[int] = mapped_column(ForeignKey("companies.id"), nullable=False, index=True)
-    location_id: Mapped[int] = mapped_column(ForeignKey("locations.id"), nullable=False, index=True)
+    location_id: Mapped[Optional[int]] = mapped_column(ForeignKey("locations.id"), index=True)
     primary_contact_id: Mapped[Optional[int]] = mapped_column(ForeignKey("contacts.id"), index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     stage: Mapped[OpportunityStage] = mapped_column(
@@ -447,12 +449,20 @@ class Opportunity(TimestampMixin, Base):
     next_action: Mapped[Optional[str]] = mapped_column(String(255))
     next_action_date: Mapped[Optional[date]] = mapped_column(Date, index=True)
     lost_reason: Mapped[Optional[str]] = mapped_column(Text)
+    notes: Mapped[Optional[str]] = mapped_column(Text)
     score_reason: Mapped[Optional[str]] = mapped_column(Text)
     ai_summary: Mapped[Optional[str]] = mapped_column(Text)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+    archived_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), index=True)
 
     company: Mapped["Company"] = relationship(back_populates="opportunities")
-    location: Mapped["Location"] = relationship(back_populates="opportunities")
+    location: Mapped[Optional["Location"]] = relationship(back_populates="opportunities")
     primary_contact: Mapped[Optional["Contact"]] = relationship(back_populates="primary_opportunities")
+    products: Mapped[list["OpportunityProduct"]] = relationship(
+        back_populates="opportunity",
+        cascade="all, delete-orphan",
+        order_by="OpportunityProduct.id",
+    )
     services: Mapped[list["Service"]] = relationship(back_populates="opportunity")
     activities: Mapped[list["Activity"]] = relationship(back_populates="opportunity")
     tasks: Mapped[list["Task"]] = relationship(back_populates="opportunity")
@@ -460,6 +470,31 @@ class Opportunity(TimestampMixin, Base):
 
     def __repr__(self) -> str:
         return f"Opportunity(id={self.id!r}, name={self.name!r}, stage={self.stage!r})"
+
+
+class OpportunityProduct(TimestampMixin, Base):
+    __tablename__ = "opportunity_products"
+    __table_args__ = (
+        CheckConstraint("estimated_quantity >= 0", name="ck_opportunity_products_estimated_quantity_nonnegative"),
+        CheckConstraint("estimated_incremental_mrr >= 0", name="ck_opportunity_products_estimated_mrr_nonnegative"),
+        UniqueConstraint("opportunity_id", "product_code", name="uq_opportunity_products_opportunity_product_code"),
+        Index("ix_opportunity_products_product", "product_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    opportunity_id: Mapped[int] = mapped_column(ForeignKey("opportunities.id"), nullable=False, index=True)
+    product_id: Mapped[Optional[int]] = mapped_column(ForeignKey("products.id"), index=True)
+    product_code: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    estimated_quantity: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    estimated_incremental_mrr: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0.00"), nullable=False)
+    interest_level: Mapped[Optional[str]] = mapped_column(String(80), index=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text)
+
+    opportunity: Mapped["Opportunity"] = relationship(back_populates="products")
+    product: Mapped[Optional["Product"]] = relationship(back_populates="opportunity_products")
+
+    def __repr__(self) -> str:
+        return f"OpportunityProduct(id={self.id!r}, opportunity_id={self.opportunity_id!r}, product_code={self.product_code!r})"
 
 
 class Activity(TimestampMixin, Base):

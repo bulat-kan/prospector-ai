@@ -467,5 +467,5 @@ def test_seed_remains_idempotent(db_session) -> None:
     first = seed_configuration(db_session)
     second = seed_configuration(db_session)
 
-    assert first == (7, True, 6)
+    assert first == (12, True, 6)
     assert second == (0, False, 0)

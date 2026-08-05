@@ -79,6 +79,7 @@ def test_ui_modules_import_without_circular_dependencies() -> None:
         "app.ui",
         "app.views.dashboard_page",
         "app.views.companies_page",
+        "app.views.opportunities_page",
         "app.components.flash_messages",
         "app.components.company_form",
         "app.components.company_browse",
@@ -86,6 +87,10 @@ def test_ui_modules_import_without_circular_dependencies() -> None:
         "app.components.location_forms",
         "app.components.contact_forms",
         "app.components.referral_forms",
+        "app.components.opportunity_browse",
+        "app.components.opportunity_form",
+        "app.components.opportunity_detail",
+        "app.components.opportunity_product_editor",
     ]
 
     for module in modules:
@@ -104,6 +109,7 @@ def test_top_level_routing_recognizes_dashboard(monkeypatch) -> None:
     monkeypatch.setattr(ui, "st", fake_st)
     monkeypatch.setattr(ui, "render_dashboard_page", lambda: setattr(called, "dashboard", True))
     monkeypatch.setattr(ui, "render_companies_page", lambda: setattr(called, "companies", True))
+    monkeypatch.setattr(ui, "render_opportunities_page", lambda: setattr(called, "opportunities", True))
 
     ui.main()
 
@@ -119,11 +125,35 @@ def test_top_level_routing_recognizes_companies(monkeypatch) -> None:
     monkeypatch.setattr(ui, "st", fake_st)
     monkeypatch.setattr(ui, "render_dashboard_page", lambda: setattr(called, "dashboard", True))
     monkeypatch.setattr(ui, "render_companies_page", lambda: setattr(called, "companies", True))
+    monkeypatch.setattr(ui, "render_opportunities_page", lambda: setattr(called, "opportunities", True))
 
     ui.main()
 
     assert called.dashboard is False
     assert called.companies is True
+
+
+def test_top_level_routing_recognizes_opportunities(monkeypatch) -> None:
+    import app.ui as ui
+
+    fake_st = RoutingStreamlit(page=ui.PAGE_OPPORTUNITIES)
+    called = SimpleNamespace(dashboard=False, companies=False, opportunities=False)
+    monkeypatch.setattr(ui, "st", fake_st)
+    monkeypatch.setattr(ui, "render_dashboard_page", lambda: setattr(called, "dashboard", True))
+    monkeypatch.setattr(ui, "render_companies_page", lambda: setattr(called, "companies", True))
+    monkeypatch.setattr(ui, "render_opportunities_page", lambda: setattr(called, "opportunities", True))
+
+    ui.main()
+
+    assert called.dashboard is False
+    assert called.companies is False
+    assert called.opportunities is True
+
+
+def test_navigation_includes_opportunities() -> None:
+    import app.ui as ui
+
+    assert ui.NAVIGATION_PAGES == ("Dashboard", "Companies", "Opportunities")
 
 
 def test_dashboard_render_function_invokes_with_mocked_dependencies(monkeypatch) -> None:
