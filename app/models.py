@@ -368,6 +368,7 @@ class Contact(TimestampMixin, Base):
     primary_opportunities: Mapped[list["Opportunity"]] = relationship(back_populates="primary_contact")
     activities: Mapped[list["Activity"]] = relationship(back_populates="contact")
     tasks: Mapped[list["Task"]] = relationship(back_populates="contact")
+    sales: Mapped[list["Sale"]] = relationship(back_populates="contact")
 
 
 class Service(TimestampMixin, Base):
@@ -565,12 +566,15 @@ class Sale(TimestampMixin, Base):
     __table_args__ = (
         Index("ix_sales_company_order_date", "company_id", "order_date"),
         Index("ix_sales_location_status", "location_id", "status"),
+        Index("ix_sales_contact_status", "contact_id", "status"),
+        Index("ix_sales_opportunity_status", "opportunity_id", "status"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     opportunity_id: Mapped[Optional[int]] = mapped_column(ForeignKey("opportunities.id"), index=True)
     company_id: Mapped[int] = mapped_column(ForeignKey("companies.id"), nullable=False, index=True)
-    location_id: Mapped[int] = mapped_column(ForeignKey("locations.id"), nullable=False, index=True)
+    location_id: Mapped[Optional[int]] = mapped_column(ForeignKey("locations.id"), index=True)
+    contact_id: Mapped[Optional[int]] = mapped_column(ForeignKey("contacts.id"), index=True)
     order_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     status: Mapped[SaleStatus] = mapped_column(
         enum_column(SaleStatus),
@@ -578,6 +582,9 @@ class Sale(TimestampMixin, Base):
         nullable=False,
         index=True,
     )
+    external_order_number: Mapped[Optional[str]] = mapped_column(String(120), index=True)
+    customer_account_reference: Mapped[Optional[str]] = mapped_column(String(120), index=True)
+    submitted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), index=True)
     scheduled_install_date: Mapped[Optional[date]] = mapped_column(Date, index=True)
     actual_install_date: Mapped[Optional[date]] = mapped_column(Date)
     total_mrr: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
@@ -585,10 +592,12 @@ class Sale(TimestampMixin, Base):
 
     opportunity: Mapped[Optional["Opportunity"]] = relationship(back_populates="sales")
     company: Mapped["Company"] = relationship(back_populates="sales")
-    location: Mapped["Location"] = relationship(back_populates="sales")
+    location: Mapped[Optional["Location"]] = relationship(back_populates="sales")
+    contact: Mapped[Optional["Contact"]] = relationship(back_populates="sales")
     sale_items: Mapped[list["SaleItem"]] = relationship(
         back_populates="sale",
         cascade="all, delete-orphan",
+        order_by="SaleItem.id",
     )
 
     def __repr__(self) -> str:
@@ -597,11 +606,16 @@ class Sale(TimestampMixin, Base):
 
 class SaleItem(TimestampMixin, Base):
     __tablename__ = "sale_items"
-    __table_args__ = (Index("ix_sale_items_sale_product", "sale_id", "product_type"),)
+    __table_args__ = (
+        Index("ix_sale_items_sale_product", "sale_id", "product_type"),
+        Index("ix_sale_items_sale_product_id", "sale_id", "product_id"),
+        Index("ix_sale_items_source_opportunity_product", "source_opportunity_product_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     sale_id: Mapped[int] = mapped_column(ForeignKey("sales.id"), nullable=False, index=True)
     product_id: Mapped[Optional[int]] = mapped_column(ForeignKey("products.id"), index=True)
+    source_opportunity_product_id: Mapped[Optional[int]] = mapped_column(ForeignKey("opportunity_products.id"), index=True)
     product_type: Mapped[ProductType] = mapped_column(enum_column(ProductType), nullable=False, index=True)
     quantity: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     monthly_revenue: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2))
@@ -609,6 +623,8 @@ class SaleItem(TimestampMixin, Base):
     installed_quantity: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     activation_date: Mapped[Optional[date]] = mapped_column(Date)
     status: Mapped[Optional[str]] = mapped_column(String(80), index=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text)
 
     sale: Mapped["Sale"] = relationship(back_populates="sale_items")
     product: Mapped[Optional["Product"]] = relationship(back_populates="sale_items")
+    source_opportunity_product: Mapped[Optional["OpportunityProduct"]] = relationship()

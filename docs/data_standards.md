@@ -102,3 +102,20 @@ helpers.
   contacts must belong to the company and be active.
 - Product detail belongs in `OpportunityProduct` rows backed by the Product
   catalog. Legacy opportunity estimate fields remain compatibility summaries.
+
+## Sales Orders
+
+- The app presents `Sale` as Sales Order and `SaleItem` as Order Item.
+- Orders may optionally originate from an Opportunity, but actual ordered
+  products, quantities, and incremental MRR may differ from Opportunity
+  estimates.
+- New orders require an active company. Provided locations and contacts must
+  belong to the company and be active.
+- Company and Opportunity source links are fixed after order creation in this
+  MVP.
+- Order items require an active Product, quantity greater than zero, and
+  nonnegative incremental MRR.
+- Duplicate product rows on the same order are rejected.
+- Submitted, Draft, and Scheduled orders are not commissionable. Current
+  analytics continue to count only legacy `INSTALLED` rows until fulfillment
+  work is integrated.

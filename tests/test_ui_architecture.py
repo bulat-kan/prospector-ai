@@ -80,6 +80,7 @@ def test_ui_modules_import_without_circular_dependencies() -> None:
         "app.views.dashboard_page",
         "app.views.companies_page",
         "app.views.opportunities_page",
+        "app.views.orders_page",
         "app.components.flash_messages",
         "app.components.company_form",
         "app.components.company_browse",
@@ -91,6 +92,11 @@ def test_ui_modules_import_without_circular_dependencies() -> None:
         "app.components.opportunity_form",
         "app.components.opportunity_detail",
         "app.components.opportunity_product_editor",
+        "app.components.order_browse",
+        "app.components.order_form",
+        "app.components.order_conversion",
+        "app.components.order_detail",
+        "app.components.order_item_editor",
     ]
 
     for module in modules:
@@ -105,11 +111,12 @@ def test_top_level_routing_recognizes_dashboard(monkeypatch) -> None:
     import app.ui as ui
 
     fake_st = RoutingStreamlit(page=ui.PAGE_DASHBOARD)
-    called = SimpleNamespace(dashboard=False, companies=False)
+    called = SimpleNamespace(dashboard=False, companies=False, orders=False)
     monkeypatch.setattr(ui, "st", fake_st)
     monkeypatch.setattr(ui, "render_dashboard_page", lambda: setattr(called, "dashboard", True))
     monkeypatch.setattr(ui, "render_companies_page", lambda: setattr(called, "companies", True))
     monkeypatch.setattr(ui, "render_opportunities_page", lambda: setattr(called, "opportunities", True))
+    monkeypatch.setattr(ui, "render_orders_page", lambda: setattr(called, "orders", True))
 
     ui.main()
 
@@ -121,11 +128,12 @@ def test_top_level_routing_recognizes_companies(monkeypatch) -> None:
     import app.ui as ui
 
     fake_st = RoutingStreamlit(page=ui.PAGE_COMPANIES)
-    called = SimpleNamespace(dashboard=False, companies=False)
+    called = SimpleNamespace(dashboard=False, companies=False, orders=False)
     monkeypatch.setattr(ui, "st", fake_st)
     monkeypatch.setattr(ui, "render_dashboard_page", lambda: setattr(called, "dashboard", True))
     monkeypatch.setattr(ui, "render_companies_page", lambda: setattr(called, "companies", True))
     monkeypatch.setattr(ui, "render_opportunities_page", lambda: setattr(called, "opportunities", True))
+    monkeypatch.setattr(ui, "render_orders_page", lambda: setattr(called, "orders", True))
 
     ui.main()
 
@@ -142,6 +150,7 @@ def test_top_level_routing_recognizes_opportunities(monkeypatch) -> None:
     monkeypatch.setattr(ui, "render_dashboard_page", lambda: setattr(called, "dashboard", True))
     monkeypatch.setattr(ui, "render_companies_page", lambda: setattr(called, "companies", True))
     monkeypatch.setattr(ui, "render_opportunities_page", lambda: setattr(called, "opportunities", True))
+    monkeypatch.setattr(ui, "render_orders_page", lambda: setattr(called, "orders", True))
 
     ui.main()
 
@@ -150,10 +159,29 @@ def test_top_level_routing_recognizes_opportunities(monkeypatch) -> None:
     assert called.opportunities is True
 
 
-def test_navigation_includes_opportunities() -> None:
+def test_top_level_routing_recognizes_orders(monkeypatch) -> None:
     import app.ui as ui
 
-    assert ui.NAVIGATION_PAGES == ("Dashboard", "Companies", "Opportunities")
+    fake_st = RoutingStreamlit(page=ui.PAGE_ORDERS)
+    called = SimpleNamespace(dashboard=False, companies=False, opportunities=False, orders=False)
+    monkeypatch.setattr(ui, "st", fake_st)
+    monkeypatch.setattr(ui, "render_dashboard_page", lambda: setattr(called, "dashboard", True))
+    monkeypatch.setattr(ui, "render_companies_page", lambda: setattr(called, "companies", True))
+    monkeypatch.setattr(ui, "render_opportunities_page", lambda: setattr(called, "opportunities", True))
+    monkeypatch.setattr(ui, "render_orders_page", lambda: setattr(called, "orders", True))
+
+    ui.main()
+
+    assert called.dashboard is False
+    assert called.companies is False
+    assert called.opportunities is False
+    assert called.orders is True
+
+
+def test_navigation_includes_opportunities_and_orders() -> None:
+    import app.ui as ui
+
+    assert ui.NAVIGATION_PAGES == ("Dashboard", "Companies", "Opportunities", "Orders")
 
 
 def test_dashboard_render_function_invokes_with_mocked_dependencies(monkeypatch) -> None:

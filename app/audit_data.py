@@ -5,6 +5,7 @@ from sqlalchemy import select, text
 
 from app.database import SessionLocal
 from app.models import Location
+from app.order_service import OrderValidationError, normalize_order_status
 from app.opportunity_service import OpportunityValidationError, is_open_stage, normalize_opportunity_stage
 from app.validation import (
     normalize_city,
@@ -221,6 +222,95 @@ def audit_opportunities(session) -> list[AuditIssue]:
     return issues
 
 
+def audit_orders(session) -> list[AuditIssue]:
+    issues: list[AuditIssue] = []
+    rows = session.execute(
+        text(
+            "SELECT s.id, s.company_id, s.location_id, s.contact_id, s.opportunity_id, s.status, "
+            "s.order_date, s.external_order_number, c.id AS company_exists, "
+            "l.company_id AS location_company_id, ct.company_id AS contact_company_id, "
+            "o.company_id AS opportunity_company_id "
+            "FROM sales s "
+            "LEFT JOIN companies c ON c.id = s.company_id "
+            "LEFT JOIN locations l ON l.id = s.location_id "
+            "LEFT JOIN contacts ct ON ct.id = s.contact_id "
+            "LEFT JOIN opportunities o ON o.id = s.opportunity_id "
+            "ORDER BY s.id"
+        )
+    ).mappings()
+    for order in rows:
+        if order["company_exists"] is None:
+            issues.append(AuditIssue("Orders", f"Order ID {order['id']}: missing company {order['company_id']}"))
+        if order["order_date"] is None:
+            issues.append(AuditIssue("Orders", f"Order ID {order['id']}: missing order date"))
+        try:
+            normalize_order_status(order["status"])
+        except OrderValidationError:
+            issues.append(AuditIssue("Orders", f"Order ID {order['id']}: invalid status {order['status']}"))
+        if order["location_id"] is not None:
+            if order["location_company_id"] is None:
+                issues.append(AuditIssue("Orders", f"Order ID {order['id']}: missing location {order['location_id']}"))
+            elif order["location_company_id"] != order["company_id"]:
+                issues.append(AuditIssue("Orders", f"Order ID {order['id']}: location belongs to another company"))
+        if order["contact_id"] is not None:
+            if order["contact_company_id"] is None:
+                issues.append(AuditIssue("Orders", f"Order ID {order['id']}: missing contact {order['contact_id']}"))
+            elif order["contact_company_id"] != order["company_id"]:
+                issues.append(AuditIssue("Orders", f"Order ID {order['id']}: contact belongs to another company"))
+        if order["opportunity_id"] is not None:
+            if order["opportunity_company_id"] is None:
+                issues.append(AuditIssue("Orders", f"Order ID {order['id']}: missing opportunity {order['opportunity_id']}"))
+            elif order["opportunity_company_id"] != order["company_id"]:
+                issues.append(AuditIssue("Orders", f"Order ID {order['id']}: opportunity belongs to another company"))
+
+    item_counts = session.execute(
+        text(
+            "SELECT s.id, COUNT(si.id) AS item_count "
+            "FROM sales s LEFT JOIN sale_items si ON si.sale_id = s.id "
+            "GROUP BY s.id HAVING COUNT(si.id) = 0"
+        )
+    ).mappings()
+    for order in item_counts:
+        issues.append(AuditIssue("Orders", f"Order ID {order['id']}: no order items"))
+
+    item_rows = session.execute(
+        text(
+            "SELECT si.id, si.sale_id, si.product_id, si.quantity, si.incremental_mrr, si.monthly_revenue, "
+            "s.status AS order_status, p.id AS product_exists, p.active AS product_active "
+            "FROM sale_items si "
+            "LEFT JOIN sales s ON s.id = si.sale_id "
+            "LEFT JOIN products p ON p.id = si.product_id "
+            "ORDER BY si.id"
+        )
+    ).mappings()
+    for item in item_rows:
+        if item["product_id"] is None or item["product_exists"] is None:
+            issues.append(AuditIssue("Orders", f"SaleItem ID {item['id']}: missing product"))
+        if item["quantity"] is not None and item["quantity"] <= 0:
+            issues.append(AuditIssue("Orders", f"SaleItem ID {item['id']}: quantity must be greater than zero"))
+        mrr_value = item["incremental_mrr"] if item["incremental_mrr"] is not None else item["monthly_revenue"]
+        if mrr_value is not None and mrr_value < 0:
+            issues.append(AuditIssue("Orders", f"SaleItem ID {item['id']}: negative incremental MRR"))
+        if item["product_active"] == 0 and item["order_status"] in {"DRAFT", "SUBMITTED", "SCHEDULED"}:
+            issues.append(AuditIssue("Orders", f"SaleItem ID {item['id']}: inactive product on open order"))
+
+    duplicates = session.execute(
+        text(
+            "SELECT sale_id, product_id, COUNT(*) AS row_count "
+            "FROM sale_items WHERE product_id IS NOT NULL "
+            "GROUP BY sale_id, product_id HAVING COUNT(*) > 1"
+        )
+    ).mappings()
+    for duplicate in duplicates:
+        issues.append(
+            AuditIssue(
+                "Orders",
+                f"Order ID {duplicate['sale_id']}: duplicate product rows for product {duplicate['product_id']}",
+            )
+        )
+    return issues
+
+
 def run_audit() -> list[AuditIssue]:
     with SessionLocal() as session:
         return [
@@ -229,6 +319,7 @@ def run_audit() -> list[AuditIssue]:
             *audit_companies(session),
             *audit_referral_partners(session),
             *audit_opportunities(session),
+            *audit_orders(session),
         ]
 
 
@@ -239,7 +330,7 @@ def main() -> int:
         return 2
     issues = run_audit()
     print("Data quality audit")
-    grouped = {"Contacts": [], "Locations": [], "Companies": [], "Referral Partners": [], "Opportunities": []}
+    grouped = {"Contacts": [], "Locations": [], "Companies": [], "Referral Partners": [], "Opportunities": [], "Orders": []}
     for issue in issues:
         grouped.setdefault(issue.category, []).append(issue.message)
     for category, messages in grouped.items():

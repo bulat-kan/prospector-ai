@@ -52,11 +52,13 @@ Page-level coordination lives in `app/views/`:
 
 - `dashboard_page.py`
 - `companies_page.py`
+- `opportunities_page.py`
+- `orders_page.py`
 
 Focused reusable UI sections live in `app/components/`, including company,
-location, contact, referral, and flash-message components. New views should be
-added under `app/views/`, and new forms/components should be added under
-`app/components/`.
+location, contact, referral, opportunity, order, and flash-message components.
+New views should be added under `app/views/`, and new forms/components should be
+added under `app/components/`.
 
 New forms must reuse shared validators and normalizers from `app.validation` and
 controlled option lists from `app.constants`. Keep database writes in CRUD or
@@ -74,8 +76,8 @@ and B&R. Business-rule notes are documented in
 
 ## Opportunity Backend Foundation
 
-Opportunity backend models, validation, CRUD/service functions, DTOs, and audit
-checks are available for future UI work. There is no Opportunities UI yet.
+Opportunity backend models, validation, CRUD/service functions, DTOs, UI, and
+audit checks are available for pipeline work.
 
 Opportunity product detail is stored in `opportunity_products` rows linked to
 the Product catalog. Legacy opportunity estimate fields remain compatibility
@@ -89,6 +91,38 @@ Run focused opportunity tests with:
 pytest -v tests/test_opportunities.py
 ```
 
+## Sales Order Backend Foundation
+
+Sales Orders use the existing internal `Sale` model, and Order Items use the
+existing `SaleItem` model. This preserves database compatibility while future UI
+can present the feature as Orders.
+
+Order backend logic lives in `app.order_service` and supports:
+
+- detached-safe order DTOs for future Streamlit views;
+- optional conversion previews from Opportunities;
+- atomic order creation with one or more validated items;
+- item add/update/remove operations;
+- order listing and filters;
+- status labels and compatibility for legacy `INSTALLED` demo sales.
+
+Orders are not commissionable merely because they are Draft, Submitted, or
+Scheduled. Current analytics still count only legacy `INSTALLED` Sale records,
+so the July 2026 estimated payout remains unchanged until fulfillment work is
+deliberately integrated.
+
+The Orders UI supports browsing/filtering orders, manual order creation,
+Opportunity-to-Order conversion, order detail editing, item add/update/remove,
+and canceling open orders. Legacy `INSTALLED` orders remain visible and
+read-only except for notes. Details are documented in
+[docs/orders.md](docs/orders.md).
+
+Run focused order tests with:
+
+```bash
+pytest -v tests/test_orders.py
+```
+
 The app currently includes:
 
 - Dashboard: monthly sales performance, commission progress, next-tier forecast,
@@ -99,6 +133,9 @@ The app currently includes:
 - Opportunities: browse and filter opportunities, add opportunities with product
   estimates, open detail records, edit pipeline fields, manage opportunity
   products, and archive or restore opportunities.
+- Orders: browse and filter sales orders, add orders manually, convert
+  opportunities into editable order drafts, manage order items, and cancel
+  orders without deleting history.
 
 Company management supports commercial and residential/SOHO locations, contact
 assignment to locations, and decision-maker contacts. Companies can be archived
@@ -149,8 +186,8 @@ Run an audit without modifying data:
 python -m app.audit_data
 ```
 
-The audit reports company, location, contact, referral partner, and opportunity
-issues by record type and ID. It makes no changes by default and returns a
+The audit reports company, location, contact, referral partner, opportunity, and
+order issues by record type and ID. It makes no changes by default and returns a
 nonzero status when issues are found. `--fix` is intentionally deferred for now;
 cleanup should be performed explicitly after reviewing the audit output.
 

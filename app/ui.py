@@ -2,13 +2,15 @@ import streamlit as st
 
 from app.views.companies_page import render_companies_page
 from app.views.dashboard_page import render_dashboard_page
+from app.views.orders_page import render_orders_page
 from app.views.opportunities_page import render_opportunities_page
 
 
 PAGE_DASHBOARD = "Dashboard"
 PAGE_COMPANIES = "Companies"
 PAGE_OPPORTUNITIES = "Opportunities"
-NAVIGATION_PAGES = (PAGE_DASHBOARD, PAGE_COMPANIES, PAGE_OPPORTUNITIES)
+PAGE_ORDERS = "Orders"
+NAVIGATION_PAGES = (PAGE_DASHBOARD, PAGE_COMPANIES, PAGE_OPPORTUNITIES, PAGE_ORDERS)
 
 
 def configure_page() -> None:
@@ -34,6 +36,8 @@ def main() -> None:
         render_companies_page()
     elif page == PAGE_OPPORTUNITIES:
         render_opportunities_page()
+    elif page == PAGE_ORDERS:
+        render_orders_page()
 
 
 if __name__ == "__main__":

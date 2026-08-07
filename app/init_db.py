@@ -13,9 +13,82 @@ def ensure_sqlite_schema_additions() -> None:
             sale_item_columns = {column["name"] for column in inspector.get_columns("sale_items")}
             if "product_id" not in sale_item_columns:
                 connection.execute(text("ALTER TABLE sale_items ADD COLUMN product_id INTEGER REFERENCES products(id)"))
+            if "source_opportunity_product_id" not in sale_item_columns:
+                connection.execute(text("ALTER TABLE sale_items ADD COLUMN source_opportunity_product_id INTEGER REFERENCES opportunity_products(id)"))
             if "incremental_mrr" not in sale_item_columns:
                 connection.execute(text("ALTER TABLE sale_items ADD COLUMN incremental_mrr NUMERIC(12, 2)"))
+            if "notes" not in sale_item_columns:
+                connection.execute(text("ALTER TABLE sale_items ADD COLUMN notes TEXT"))
             connection.execute(text("CREATE INDEX IF NOT EXISTS ix_sale_items_product_id ON sale_items (product_id)"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_sale_items_source_opportunity_product ON sale_items (source_opportunity_product_id)"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_sale_items_sale_product_id ON sale_items (sale_id, product_id)"))
+
+        if "sales" in table_names:
+            sale_column_info = inspector.get_columns("sales")
+            sale_columns = {column["name"] for column in sale_column_info}
+            for column_name, column_type in (
+                ("contact_id", "INTEGER REFERENCES contacts(id)"),
+                ("external_order_number", "VARCHAR(120)"),
+                ("customer_account_reference", "VARCHAR(120)"),
+                ("submitted_at", "DATETIME"),
+            ):
+                if column_name not in sale_columns:
+                    connection.execute(text(f"ALTER TABLE sales ADD COLUMN {column_name} {column_type}"))
+            location_column = next((column for column in sale_column_info if column["name"] == "location_id"), None)
+            if location_column is not None and location_column["nullable"] is False:
+                connection.execute(text("ALTER TABLE sales RENAME TO sales_legacy_location_required"))
+                connection.execute(
+                    text(
+                        """
+                        CREATE TABLE sales (
+                            id INTEGER NOT NULL,
+                            opportunity_id INTEGER,
+                            company_id INTEGER NOT NULL,
+                            location_id INTEGER,
+                            contact_id INTEGER,
+                            order_date DATE NOT NULL,
+                            status VARCHAR(21) NOT NULL,
+                            external_order_number VARCHAR(120),
+                            customer_account_reference VARCHAR(120),
+                            submitted_at DATETIME,
+                            scheduled_install_date DATE,
+                            actual_install_date DATE,
+                            total_mrr NUMERIC(12, 2),
+                            notes TEXT,
+                            created_at DATETIME NOT NULL,
+                            updated_at DATETIME NOT NULL,
+                            PRIMARY KEY (id),
+                            FOREIGN KEY(opportunity_id) REFERENCES opportunities (id),
+                            FOREIGN KEY(company_id) REFERENCES companies (id),
+                            FOREIGN KEY(location_id) REFERENCES locations (id),
+                            FOREIGN KEY(contact_id) REFERENCES contacts (id)
+                        )
+                        """
+                    )
+                )
+                connection.execute(
+                    text(
+                        """
+                        INSERT INTO sales (
+                            id, opportunity_id, company_id, location_id, contact_id, order_date, status,
+                            external_order_number, customer_account_reference, submitted_at,
+                            scheduled_install_date, actual_install_date, total_mrr, notes, created_at, updated_at
+                        )
+                        SELECT
+                            id, opportunity_id, company_id, location_id, contact_id, order_date, status,
+                            external_order_number, customer_account_reference, submitted_at,
+                            scheduled_install_date, actual_install_date, total_mrr, notes, created_at, updated_at
+                        FROM sales_legacy_location_required
+                        """
+                    )
+                )
+                connection.execute(text("DROP TABLE sales_legacy_location_required"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_company_order_date ON sales (company_id, order_date)"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_location_status ON sales (location_id, status)"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_contact_status ON sales (contact_id, status)"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_opportunity_status ON sales (opportunity_id, status)"))
+            connection.execute(text("CREATE INDEX IF NOT EXISTS ix_sales_external_order_number ON sales (external_order_number)"))
+            connection.execute(text("UPDATE sales SET status = 'CANCELED' WHERE status = 'CANCELLED'"))
 
         source_tables = ("companies", "locations", "contacts")
         for table_name in source_tables:
