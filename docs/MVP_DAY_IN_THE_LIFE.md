@@ -872,63 +872,92 @@ introduced casually during implementation.
 
 ---
 
-## 34. Unfinished Planned Prospect Actions and Daily Replanning
+## 34. Daily Targets vs. Unfinished Prospect Work
 
-Daily activity targets and individual prospect actions are treated differently.
+Daily numerical activity goals and individual prospect actions are different
+product concepts.
 
-### Activity targets reset each day
-
-Daily goals such as calls, visits, decision makers reached, and referral asks are behavior targets. Any numerical shortfall does **not** automatically roll into the next day's target.
-
-Example: if the goal is 30 calls and only 5 are completed, tomorrow does not automatically become a 55-call goal. Tomorrow begins with its normal target unless the AE deliberately changes it.
-
-### Untouched prospects return to the eligible pool
-
-If a prospect was selected for today's Mission but the AE never attempted the planned action, no fake Activity or attempt is created. The prospect remains eligible and returns to the appropriate prospect pool at the end of the planning cycle.
+Daily goals reset every day. They do **not** accumulate as numerical debt.
 
 Examples:
 
-- 25 planned calls not attempted → return to the call-eligible prospect pool.
-- 10 planned visits not completed → return to the territory visit-eligible prospect pool.
+- If the goal is 30 calls and the AE completes 5, tomorrow does **not** become
+  55 calls.
+- If the goal is 15 visits and the AE completes 5, tomorrow does **not** become
+  25 visits.
+- Missed Decision Maker and Referral Ask targets also do not numerically roll
+  over.
 
-During **Plan Tomorrow**, Prospector AI re-evaluates and re-ranks the entire eligible pool. Previously planned but untouched prospects may or may not be selected again for the next day's Mission.
+Core rule:
 
-```text
-TODAY'S MISSION
-      │
-      ├── Planned calls
-      │      ├── Attempted → Activity + outcome + next-action rules
-      │      └── Untouched ───────────────┐
-      │                                    │
-      ├── Planned visits                   │
-      │      ├── Visited → Activity + outcome + next-action rules
-      │      └── Untouched ────────────────┤
-      │                                    ▼
-      │                         ELIGIBLE PROSPECT POOLS
-      │                                    │
-      │                           Re-score / Re-rank
-      │                                    │
-      └──────────────────────────► PLAN TOMORROW
-                                      │
-                              New Call List + Route
+> **Goals do not roll over. Unfinished prospect actions do.**
+
+### Untouched Planned Prospects
+
+If a prospect was selected for today's Mission but the AE never attempted the
+planned action, no fake Activity or failed attempt is created.
+
+- Untouched planned call prospects return to the call-eligible pool.
+- Untouched planned visit prospects return to the visit-eligible territory pool.
+- They are **not** automatically copied into tomorrow's Mission.
+- During the next planning cycle, the entire eligible pool is re-evaluated and
+  re-ranked.
+- Previously planned but untouched prospects may be selected again if they still
+  rank highly enough.
+- Other prospects may replace them because of urgency, follow-up commitments,
+  decision-maker availability, geography, business hours, priority,
+  opportunity/need signals, retry timing, or route efficiency.
+
+> **Mission lists are temporary daily selections. Prospects are the persistent
+> source of truth.**
+
+### Untouched vs. Attempted
+
+- **Never attempted:** remains eligible for future selection.
+- **Called -> No Answer:** Activity is recorded and retry rules determine future
+  eligibility.
+- **Visited -> Gatekeeper:** Activity is recorded and known decision-maker
+  availability or explicit follow-up affects future visit priority.
+- **Decision maker says "Call Friday":** creates an explicit Friday follow-up
+  and receives very high planning priority.
+
+### Conceptual Flow
+
+``` text
+ALL ELIGIBLE PROSPECTS
+        ↓
+Fixed commitments / follow-ups
+        ↓
+Eligibility filters
+        ↓
+Score + rank
+        ↓
+Build today's Call and Visit Missions
+        ↓
+Execute
+        ↓
+Completed -> Activity + Next Action
+Untouched -> Return to eligible pool
+        ↓
+Re-score during next planning cycle
 ```
 
-### Attempted prospects follow outcome rules instead
+This keeps prospects from disappearing while preventing an ever-growing rollover
+backlog.
 
-An attempted prospect should not simply return to the untouched pool as if nothing happened.
+## 35. Lead Supply and Prospect Pool
 
-- **Called → No Answer:** record the Activity; retry rules determine when the prospect becomes eligible again.
-- **Visited → Gatekeeper:** record the Activity; decision-maker availability and next-action information influence the next recommended visit.
-- **Decision maker says “Call Friday”:** create an explicit follow-up; Friday receives high planning priority.
-- **Not Now / Nurture:** make the prospect eligible at the appropriate future time.
-- **Disqualified / Lost:** follow the applicable disposition and revisit rules rather than immediately recycling the prospect.
+> **Prospect Pool = inventory. Mission = today's selected work.**
 
-### Replanning principle
+> **Lead Supply ≠ Prospecting Execution.**
 
-The planner should not blindly copy unfinished work into tomorrow. It should select tomorrow's best work from all currently eligible prospects based on urgency, context, availability, territory rules, priority, capacity, and—when relevant—geography.
+Salesforce remains the corporate system of record. Prospector AI focuses on
+prospecting execution, lead intelligence, follow-up, daily planning, activity
+history, and coaching.
 
-This creates the following product rule:
+Important correction: Salesforce does **not** allow the AE to export a
+convenient bulk existing-customer dataset containing services and contact-person
+information. Prospector AI must not depend on such an export.
 
-> **Daily activity targets reset each day. Unworked planned prospects return to their eligible prospect pool. Each planning cycle re-evaluates and re-ranks the full eligible pool, so previously planned but untouched prospects may or may not be selected for the next Mission.**
-
-The goal is to ensure that no prospect disappears while preventing an ever-growing rollover backlog.
+Lead supply, import location, pool replenishment, ranking, and daily Mission
+selection rules are defined in [MVP_LEAD_ENGINE.md](MVP_LEAD_ENGINE.md).

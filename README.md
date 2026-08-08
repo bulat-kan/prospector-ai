@@ -43,6 +43,11 @@ pytest -v
 streamlit run app/ui.py
 ```
 
+## Product Planning Docs
+
+- [MVP Day in the Life](docs/MVP_DAY_IN_THE_LIFE.md)
+- [MVP Lead Engine](docs/MVP_LEAD_ENGINE.md)
+
 ## UI Architecture
 
 [app/ui.py](app/ui.py) is the Streamlit entry point. It handles page
