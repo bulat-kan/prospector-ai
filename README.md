@@ -47,6 +47,7 @@ streamlit run app/ui.py
 
 - [MVP Day in the Life](docs/MVP_DAY_IN_THE_LIFE.md)
 - [MVP Lead Engine](docs/MVP_LEAD_ENGINE.md)
+- [MVP Calendar and Scheduling](docs/MVP_CALENDAR_AND_SCHEDULING.md)
 
 ## UI Architecture
 

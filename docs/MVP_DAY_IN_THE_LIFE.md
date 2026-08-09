@@ -53,6 +53,21 @@ Tomorrow — Friday, Aug 8
 Fixed commitments are placed first. Prospecting blocks are built around
 them.
 
+Conceptually, Plan Tomorrow should consider work in this order:
+
+1. Calendar/fixed commitments
+2. Explicit appointments
+3. Manually pinned or time-constrained work
+4. Due/overdue follow-ups
+5. Golden Time blocks
+6. Ranked call prospects
+7. Ranked visit prospects
+8. Flexible administrative/review work
+
+This is a product-planning principle, not immutable algorithm code. Calendar
+and scheduling responsibilities are defined in
+[MVP_CALENDAR_AND_SCHEDULING.md](MVP_CALENDAR_AND_SCHEDULING.md).
+
 ### Tomorrow's behavior goals
 
 ``` text
@@ -81,6 +96,10 @@ Recommended buckets:
 
 The AE can accept, remove, add, and reorder prospects.
 
+The AE may also manually pin a specific prospect into tomorrow's Call Mission.
+Manual pins are user overrides that reserve capacity; they do not increase the
+daily Call target.
+
 Remote calling/email prospecting may cover eligible Spectrum service
 areas beyond the physical door-knocking territory.
 
@@ -95,6 +114,11 @@ should appear.
 Future prioritization can consider geography, business hours, priority,
 previous attempts, promised follow-ups, appointments, industry, and
 likelihood of reaching a decision maker.
+
+The AE may manually pin a specific prospect into tomorrow's Visit Mission only
+when that prospect passes physical prospecting territory eligibility. A prospect
+outside the approved door-knocking territory should not be added as a physical
+Visit; where appropriate, Prospector AI may offer Call as an alternative.
 
 ``` text
 TERRITORY ROUTE
@@ -269,6 +293,11 @@ Tuesday • 10:00 AM
 
 AI-generated information should not silently become trusted prospect
 data without review.
+
+If the approved Next Action is a time-specific Appointment, Prospector AI should
+retain the sales context and create/update the corresponding Google Calendar
+event so appointment visibility and device reminders do not depend on the web
+app being open.
 
 ------------------------------------------------------------------------
 
@@ -961,3 +990,6 @@ information. Prospector AI must not depend on such an export.
 
 Lead supply, import location, pool replenishment, ranking, and daily Mission
 selection rules are defined in [MVP_LEAD_ENGINE.md](MVP_LEAD_ENGINE.md).
+Calendar commitments, appointment creation, reminders, and calendar-aware daily
+planning rules are defined in
+[MVP_CALENDAR_AND_SCHEDULING.md](MVP_CALENDAR_AND_SCHEDULING.md).

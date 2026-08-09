@@ -200,7 +200,9 @@ ALL PROSPECT INVENTORY
         ↓
 Eligibility filters
         ↓
-Fixed commitments
+Calendar / fixed commitments
+        ↓
+Pinned / time-constrained work
         ↓
 Due / overdue follow-ups
         ↓
@@ -212,6 +214,86 @@ Apply daily capacity
         ↓
 Call Mission + Visit Mission
 ```
+
+Calendar and scheduling constraints answer **when** work can happen. Lead Engine
+rules answer **who** should be worked. See
+[MVP_CALENDAR_AND_SCHEDULING.md](MVP_CALENDAR_AND_SCHEDULING.md).
+
+## Manual Mission Pinning
+
+Prospector AI recommends prospects for daily Missions, but the AE always retains
+control.
+
+The AE must be able to manually add or pin a specific prospect to tomorrow's
+Mission with actions such as:
+
+- Add to Tomorrow -> Call
+- Add to Tomorrow -> Visit
+
+This should be possible from:
+
+1. Prospect Detail
+2. Recommended Mission / Plan Tomorrow
+3. Review Calls / Review Route where appropriate
+
+A manually pinned prospect is a **user override**. It should not merely receive a
+higher ranking score.
+
+Conceptually:
+
+``` text
+Pinned / fixed work
+        ↓
+Planner reserves capacity
+        ↓
+Planner fills remaining capacity
+        ↓
+Final Mission
+```
+
+Examples:
+
+- Daily Call Target = 30. AE manually pins 2 prospects. Planner selects 28
+  additional call prospects. Final Call Mission = 30.
+- Daily Visit Target = 15. AE manually pins 1 eligible visit. Planner selects 14
+  additional visit prospects. Final Visit Mission = 15.
+
+Manual pinning does **not** increase the daily activity target.
+
+The AE may optionally attach useful context such as preferred time, priority, or
+note/reason.
+
+Example:
+
+``` text
+Owner usually arrives after 2 PM.
+```
+
+### Manual Call vs. Manual Visit
+
+Manual Call and Manual Visit are not equivalent.
+
+A manually pinned Call may be allowed anywhere the AE is permitted to remotely
+prospect or sell, subject to company rules.
+
+A manually pinned Visit must pass physical prospecting territory eligibility.
+If a prospect is outside the AE's approved physical prospecting territory:
+
+- do not allow it to be added as a physical Visit;
+- explain why;
+- where appropriate, offer Call as an alternative.
+
+Example UX concept:
+
+``` text
+This prospect is outside your physical prospecting territory.
+
+You can still add it to tomorrow's Call Mission if remote prospecting is
+permitted.
+```
+
+Do not hard-code current cities into the product architecture. Territory must
+eventually be configurable.
 
 ## Ranking Signals
 
@@ -286,6 +368,12 @@ Recommended: Visit
 
 The AE must always be able to override recommendations.
 
+Override actions should eventually include removing a recommended prospect,
+manually adding a prospect, pinning a prospect, changing Call vs. Visit where
+eligibility permits, rearranging flexible work, preserving fixed commitments,
+and rebuilding/recalculating remaining Mission capacity. Manual intervention
+must not corrupt the underlying Prospect Pool.
+
 ## Unfinished Work
 
 Daily goals reset. Untouched call prospects return to the call pool. Untouched
@@ -346,6 +434,8 @@ Lead Supply
 Prospect Pools
    ↓
 Plan Tomorrow
+   ↓
+Calendar / fixed commitments
    ↓
 Today's Mission
    ↓
